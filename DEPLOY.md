@@ -23,8 +23,11 @@ www.sadcat.site  →  <IP сервера>
 ```bash
 ssh user@<IP сервера>
 
-git clone https://github.com/YOURUSER/sadcat.git
-cd sadcat
+sudo mkdir -p /var/www/sadcat
+sudo chown $USER:$USER /var/www/sadcat
+
+git clone https://github.com/YOURUSER/sadcat.git /var/www/sadcat
+cd /var/www/sadcat
 ```
 
 ---
@@ -33,20 +36,21 @@ cd sadcat
 
 ```bash
 # С вашего PC (Windows PowerShell):
-scp "c:\Users\User\Desktop\some code\sadcat\.env" user@<IP>:/home/user/sadcat/.env
-scp "c:\Users\User\Desktop\some code\sadcat\sessions\sadcat_session.session" user@<IP>:/home/user/sadcat/sessions/
+scp "c:\Users\User\Desktop\some code\sadcat\.env" user@<IP>:/var/www/sadcat/.env
+scp "c:\Users\User\Desktop\some code\sadcat\sessions\sadcat_session.session" user@<IP>:/var/www/sadcat/sessions/
 ```
 
 > **Важно:** Сначала создайте папку sessions на сервере если её нет:
-> `ssh user@<IP> "mkdir -p /home/user/sadcat/sessions"`
+> `ssh user@<IP> "mkdir -p /var/www/sadcat/sessions"`
 
 ---
 
 ## Шаг 4 — Запускаем деплой-скрипт
 
-На сервере, в директории проекта:
+На сервере, в директории `/var/www/sadcat`:
 
 ```bash
+cd /var/www/sadcat
 chmod +x deploy.sh
 sudo ./deploy.sh
 ```
@@ -80,7 +84,7 @@ curl -I https://sadcat.site
 ## Обновление кода
 
 ```bash
-cd /home/user/sadcat
+cd /var/www/sadcat
 git pull
 docker compose -f docker-compose.prod.yml up --build --no-deps -d backend
 # Если фронтенд изменился:

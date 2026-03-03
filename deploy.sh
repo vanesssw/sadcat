@@ -41,6 +41,7 @@ fi
 info ".env найден"
 
 # ── 3. Проверка session ───────────────────────────────────────────────────────
+mkdir -p sessions
 SESSION_FILE=$(ls sessions/*.session 2>/dev/null | head -1)
 if [ -z "$SESSION_FILE" ]; then
     error "Telegram session не найден в sessions/\nСкопируйте:\n  scp sessions/sadcat_session.session user@SERVER:/path/to/sadcat/sessions/"
