@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SADCAT: MONI RUSH — Leaderboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="scanlines"></div>
+  <div class="bg-grid" id="bgParticles"></div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-text">
+          <span class="logo-title">SADCAT</span>
+          <span class="logo-sub">MONI RUSH</span>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="nav-link active" href="#rules">[ RULES ]</a>
+        <a class="nav-link" href="#leaderboard">[ SCORES ]</a>
+        <a class="nav-link" href="#refleaderboard">[ REFS ]</a>
+        <a class="nav-link" href="/gamble">[ GAMBLE ]</a>
+        <a class="nav-link nav-tg" href="https://t.me/sadcatgamble" target="_blank" rel="noopener">[ TG ]</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero" id="rules">
+      <div class="hero-inner">
+        <div class="pixel-title-box">
+          <h1 class="hero-title">SADCAT:<br/>MONI RUSH</h1>
+        </div>
+        <p class="hero-tagline">WATCH. TYPE FAST. WIN BIG.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="https://kick.com/sadcatgamble" target="_blank" rel="noopener">[ WATCH STREAM ]</a>
+          <a class="btn btn-outline" href="https://x.com/sadcat_gamble" target="_blank" rel="noopener">[ FOLLOW ]</a>
+        </div>
+
+        <div class="rules-box">
+          <div class="rules-title">&gt; HOW TO PLAY_</div>
+          <ol class="rules-list">
+            <li>Watch the stream: <a href="https://kick.com/sadcatgamble" target="_blank" rel="noopener" class="rules-link">kick.com/sadcatgamble</a></li>
+            <li>During the stream I say a <span class="rules-hl">code word</span> at a random moment</li>
+            <li>Enter it in the bot &rarr; earn points</li>
+            <li><span class="rules-hl">Faster = more points</span></li>
+            <li>Code is active for <span class="rules-hl">30 minutes</span>, then expires</li>
+            <li>Top players appear in the leaderboard</li>
+          </ol>
+          <div class="rules-note">FINAL AT THE END OF THE MONTH</div>
+        </div>
+      </div>
+
+      <div class="hero-art">
+        <div class="prize-box">
+          <div class="prize-label">TOTAL PRIZE POOL:</div>
+          <div class="prize-amount">250 SOL</div>
+          <div class="prize-sub">~$20,000</div>
+          <div class="prize-divider"></div>
+          <div class="prize-pools">
+            <div class="prize-pool-item">
+              <span class="pool-label">VIEWERS</span>
+              <span class="pool-amount">125 SOL</span>
+            </div>
+            <div class="prize-pool-item">
+              <span class="pool-label">REFERRALS</span>
+              <span class="pool-amount">125 SOL</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Leaderboard -->
+    <section class="section" id="leaderboard">
+      <div class="container">
+        <div class="section-header">
+          <h2 class="section-title">&gt; TOP PLAYERS_</h2>
+          <div class="update-info">
+            <span class="dot" id="statusDot"></span>
+            <span id="lastUpdated">LOADING...</span>
+          </div>
+        </div>
+
+        <!-- Top-3 podium -->
+        <div class="podium" id="podium"></div>
+
+        <!-- Full leaderboard table -->
+        <div class="leaderboard-card">
+          <div class="leaderboard-header-row">
+            <span>RANK</span>
+            <span>PLAYER</span>
+            <span>PTS</span>
+          </div>
+          <div class="leaderboard-body" id="leaderboardBody">
+            <div class="loading-state">
+              <div class="spinner"></div>
+              <p>LOADING DATA...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Ref Leaderboard -->
+    <section class="section section-dark" id="refleaderboard">
+      <div class="container">
+        <div class="section-header">
+          <h2 class="section-title">&gt; REF LEADERBOARD_</h2>
+          <div class="update-info">
+            <span class="dot" id="refStatusDot"></span>
+            <span id="refLastUpdated">LOADING...</span>
+          </div>
+        </div>
+        <div class="leaderboard-card">
+          <div class="leaderboard-header-row">
+            <span>RANK</span>
+            <span>PLAYER</span>
+            <span>REFS</span>
+          </div>
+          <div class="leaderboard-body" id="refLeaderboardBody">
+            <div class="loading-state">
+              <div class="spinner"></div>
+              <p>LOADING DATA...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Contest / Prize breakdown -->
+    <section class="section" id="contest">
+      <div class="container">
+        <div class="section-header">
+          <h2 class="section-title">&gt; PRIZE BREAKDOWN_</h2>
+        </div>
+        <div class="prizes-grid">
+
+          <!-- Viewers leaderboard -->
+          <div class="prize-card">
+            <div class="prize-card-title">VIEWERS LEADERBOARD</div>
+            <div class="prize-card-sub">TOTAL: 125 SOL</div>
+            <div class="prize-table">
+              <div class="prize-row prize-row-gold">
+                <span class="pr-rank">#1</span>
+                <span class="pr-prize">25 SOL + PRIVATE</span>
+              </div>
+              <div class="prize-row prize-row-silver">
+                <span class="pr-rank">#2</span>
+                <span class="pr-prize">15 SOL + PRIVATE</span>
+              </div>
+              <div class="prize-row prize-row-bronze">
+                <span class="pr-rank">#3</span>
+                <span class="pr-prize">10 SOL + PRIVATE</span>
+              </div>
+              <div class="prize-row">
+                <span class="pr-rank">#4&ndash;18</span>
+                <span class="pr-prize">5 SOL</span>
+              </div>
+              <div class="prize-row">
+                <span class="pr-rank">#19&ndash;30</span>
+                <span class="pr-prize">PRIVATE ACCESS</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Referrals leaderboard -->
+          <div class="prize-card">
+            <div class="prize-card-title">REFERRAL LEADERBOARD</div>
+            <div class="prize-card-sub">TOTAL: 125 SOL (TOP 5)</div>
+            <div class="prize-table">
+              <div class="prize-row prize-row-gold">
+                <span class="pr-rank">#1</span>
+                <span class="pr-prize">50 SOL</span>
+              </div>
+              <div class="prize-row prize-row-silver">
+                <span class="pr-rank">#2</span>
+                <span class="pr-prize">30 SOL</span>
+              </div>
+              <div class="prize-row prize-row-bronze">
+                <span class="pr-rank">#3</span>
+                <span class="pr-prize">15 SOL</span>
+              </div>
+              <div class="prize-row">
+                <span class="pr-rank">#4</span>
+                <span class="pr-prize">15 SOL</span>
+              </div>
+              <div class="prize-row">
+                <span class="pr-rank">#5</span>
+                <span class="pr-prize">15 SOL</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-logo">SADCAT GAMBLE</div>
+        <p class="footer-disclaimer">NFA. MEOW :3</p>
+        <div class="footer-links">
+          <a href="https://x.com/sadcat_gamble" target="_blank" rel="noopener">[ TWITTER ]</a>
+          <a href="https://t.me/sadcatgamble" target="_blank" rel="noopener">[ TELEGRAM ]</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

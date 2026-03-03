@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SADCAT GAMBLE ROOM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* Page-specific overrides */
+    .gamble-hero {
+      padding: 60px 0 32px;
+      text-align: center;
+      position: relative;
+    }
+    .gamble-hero-title {
+      font-family: var(--font-pixel);
+      font-size: clamp(14px, 3vw, 22px);
+      color: var(--cyan);
+      text-shadow: 0 0 20px rgba(0,229,255,0.6), 4px 4px 0 #000;
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+    }
+    .gamble-hero-sub {
+      font-family: var(--font-pixel);
+      font-size: 9px;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      margin-bottom: 28px;
+    }
+    .gamble-tabs {
+      display: flex;
+      gap: 0;
+      border: 3px solid var(--blue);
+      width: fit-content;
+      margin: 0 auto 36px;
+      box-shadow: 4px 4px 0 #000;
+    }
+    .gamble-tab {
+      font-family: var(--font-pixel);
+      font-size: 9px;
+      color: var(--text-muted);
+      background: var(--bg-2);
+      border: none;
+      padding: 10px 20px;
+      cursor: none;
+      transition: none;
+      border-right: 2px solid var(--blue);
+      position: relative;
+    }
+    .gamble-tab:last-child { border-right: none; }
+    .gamble-tab.active {
+      color: var(--cyan);
+      background: rgba(30,92,255,0.2);
+      text-shadow: 0 0 8px rgba(0,229,255,0.4);
+    }
+    .gamble-tab:hover:not(.active) { color: var(--text); background: rgba(30,92,255,0.08); }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .gamble-section-title {
+      font-family: var(--font-pixel);
+      font-size: 10px;
+      color: var(--cyan);
+      letter-spacing: 1px;
+      margin-bottom: 20px;
+      text-shadow: 0 0 8px rgba(0,229,255,0.4);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .gamble-count-badge {
+      font-family: var(--font-pixel);
+      font-size: 7px;
+      background: var(--blue);
+      color: #fff;
+      padding: 2px 8px;
+      box-shadow: 2px 2px 0 #000;
+    }
+
+    .update-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding: 10px 16px;
+      border: 2px solid rgba(30,92,255,0.3);
+      background: var(--bg-2);
+    }
+    .update-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-pixel);
+      font-size: 8px;
+      color: var(--text-muted);
+    }
+    .update-bar-right {
+      font-family: var(--font-pixel);
+      font-size: 7px;
+      color: var(--text-muted);
+    }
+
+    .empty-calls {
+      border: 2px dashed rgba(30,92,255,0.3);
+      padding: 40px;
+      text-align: center;
+      font-family: var(--font-pixel);
+      font-size: 9px;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+    }
+
+    /* ATH badge variants */
+    .call-ath.tracking {
+      font-size: 8px;
+      color: var(--text-muted);
+      background: rgba(30,92,255,0.15);
+      border: 1px solid rgba(30,92,255,0.3);
+      padding: 4px 8px;
+      text-shadow: none;
+    }
+    .call-ath.big {
+      font-size: clamp(14px, 2vw, 20px);
+    }
+    .call-ath.moon { color: #00FF6A; text-shadow: 0 0 14px rgba(0,255,106,0.7); }
+    .call-ath.loss {
+      color: #FF3B3B;
+      text-shadow: 0 0 10px rgba(255,59,59,0.6);
+    }
+    .call-ath.loss.big {
+      font-size: clamp(14px, 2vw, 20px);
+    }
+    .call-pumpfun-btn {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 7px;
+      color: #a855f7;
+      border: 1px solid #a855f7;
+      padding: 4px 8px;
+      text-decoration: none;
+      background: rgba(168,85,247,0.08);
+      letter-spacing: 1px;
+      transition: background 0.2s, color 0.2s;
+    }
+    .call-pumpfun-btn:hover {
+      background: rgba(168,85,247,0.25);
+      color: #d8b4fe;
+    }
+    .call-pumpfun-badge {
+      font-size: 7px;
+      color: #a855f7;
+      opacity: 0.7;
+      letter-spacing: 1px;
+    }
+
+    /* Channels info bar */
+    .channel-bar {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .channel-bar a {
+      font-family: var(--font-pixel);
+      font-size: 8px;
+      color: var(--text-muted);
+      border: 2px solid rgba(30,92,255,0.3);
+      padding: 6px 14px;
+      margin: 0 4px;
+      display: inline-block;
+    }
+    .channel-bar a:hover { color: var(--cyan); border-color: var(--cyan); }
+  </style>
+</head>
+<body>
+  <div class="scanlines"></div>
+  <div class="bg-grid" id="bgParticles"></div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-text">
+          <span class="logo-title">SADCAT</span>
+          <span class="logo-sub">GAMBLE ROOM</span>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="nav-link" href="/">[ HOME ]</a>
+        <a class="nav-link" href="/#leaderboard">[ SCORES ]</a>
+        <a class="nav-link" href="/#refleaderboard">[ REFS ]</a>
+        <a class="nav-link active" href="gamble.html">[ GAMBLE ]</a>
+        <a class="nav-link nav-tg" href="https://t.me/sadcatgamble" target="_blank" rel="noopener">[ TG ]</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      <div class="gamble-hero">
+        <div class="gamble-hero-title">&gt; GAMBLE ROOM_</div>
+        <div class="gamble-hero-sub">CALLS FROM t.me/sadcatgamble &bull; SOLANA TOKENS &bull; DEXSCREENER DATA</div>
+        <div class="channel-bar">
+          <a href="https://t.me/sadcatgamble" target="_blank" rel="noopener">[ TELEGRAM ]</a>
+          <a href="https://kick.com/sadcatgamble" target="_blank" rel="noopener">[ STREAM ]</a>
+        </div>
+      </div>
+
+      <!-- Status bar -->
+      <div class="update-bar">
+        <div class="update-bar-left">
+          <span class="dot" id="gambleStatusDot"></span>
+          <span id="gambleLastUpdated">LOADING...</span>
+        </div>
+        <div class="update-bar-right" id="gambleTotalCount"></div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="gamble-tabs">
+        <button class="gamble-tab active" data-tab="live">LIVE CALLS</button>
+        <button class="gamble-tab" data-tab="old">OLD CALLS</button>
+      </div>
+
+      <!-- Live tab -->
+      <div class="tab-content active" id="tab-live">
+        <div class="gamble-section-title">
+          &gt; LIVE CALLS_
+          <span class="gamble-count-badge" id="liveCount">—</span>
+        </div>
+        <div class="call-grid" id="gambleLiveCalls">
+          <div class="loading-state"><div class="spinner"></div><p>LOADING...</p></div>
+        </div>
+      </div>
+
+      <!-- Old tab -->
+      <div class="tab-content" id="tab-old">
+        <div class="gamble-section-title">
+          &gt; OLD CALLS_
+          <span class="gamble-count-badge" id="oldCount">—</span>
+        </div>
+        <div class="call-grid" id="gambleOldCalls">
+          <div class="loading-state"><div class="spinner"></div><p>LOADING...</p></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-logo">SADCAT GAMBLE</div>
+        <p class="footer-disclaimer">NFA. MEOW :3</p>
+        <div class="footer-links">
+          <a href="https://x.com/sadcat_gamble" target="_blank" rel="noopener">[ TWITTER ]</a>
+          <a href="https://t.me/sadcatgamble" target="_blank" rel="noopener">[ TELEGRAM ]</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const API_BASE = '/api';
+    const REFRESH_INTERVAL = 60000;
+
+    // ---- Pixel rocket cursor ----
+    (function initRocket() {
+      const SZ = 4;
+      const pixels = [
+        // nose
+        [3,0,'#FF2222'],
+        // body
+        [2,1,'#FF4444'],[3,1,'#FF2222'],[4,1,'#FF4444'],
+        [1,2,'#FF5555'],[2,2,'#FF2222'],[3,2,'#FF2222'],[4,2,'#FF2222'],[5,2,'#FF5555'],
+        [1,3,'#FF4444'],[2,3,'#FF2222'],[3,3,'#FFFFFF'],[4,3,'#FF2222'],[5,3,'#FF4444'],
+        [2,4,'#FF4444'],[3,4,'#FF2222'],[4,4,'#FF4444'],
+        // wings
+        [0,3,'#CC1111'],[6,3,'#CC1111'],
+        [0,4,'#CC1111'],[6,4,'#CC1111'],
+        // exhaust flame
+        [2,5,'#FFA500'],[3,5,'#FFDD00'],[4,5,'#FFA500'],
+        [3,6,'#FF6600'],
+      ];
+
+      const W = 7, H = 7;
+      const canvas = document.createElement('canvas');
+      canvas.width  = W * SZ;
+      canvas.height = H * SZ;
+      canvas.style.cssText = 'position:fixed;pointer-events:none;z-index:99999;display:none;image-rendering:pixelated;';
+      document.body.appendChild(canvas);
+      const ctx = canvas.getContext('2d');
+      pixels.forEach(([c, r, color]) => {
+        ctx.fillStyle = color;
+        ctx.fillRect(c * SZ, r * SZ, SZ, SZ);
+      });
+
+      const trail = [];
+      const TRAIL_LEN = 10;
+
+      let mx = -200, my = -200;
+      let rx = -200, ry = -200;
+      let angle = 0;
+      let targetAngle = 0;
+
+      document.addEventListener('mousemove', e => {
+        const dx = e.clientX - rx;
+        const dy = e.clientY - ry;
+        if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+          targetAngle = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
+        }
+        mx = e.clientX;
+        my = e.clientY;
+        canvas.style.display = 'block';
+      });
+
+      document.addEventListener('mouseleave', () => { canvas.style.display = 'none'; });
+
+      const trailContainer = document.createElement('div');
+      trailContainer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:99998;';
+      document.body.appendChild(trailContainer);
+
+      function lerp(a, b, t) { return a + (b - a) * t; }
+      function lerpAngle(a, b, t) {
+        let diff = ((b - a + 540) % 360) - 180;
+        return a + diff * t;
+      }
+
+      function spawnTrailPixel(x, y) {
+        const p = document.createElement('div');
+        const colors = ['#FF2222','#FF6600','#FFA500','#FFDD00'];
+        const color  = colors[Math.floor(Math.random() * colors.length)];
+        const size   = SZ * (Math.random() > 0.5 ? 2 : 1);
+        p.style.cssText = `
+          position:fixed;width:${size}px;height:${size}px;
+          background:${color};
+          left:${x - size/2}px;top:${y - size/2}px;
+          pointer-events:none;
+          image-rendering:pixelated;
+          transition:opacity 0.35s linear, transform 0.35s linear;
+        `;
+        trailContainer.appendChild(p);
+        trail.push(p);
+        requestAnimationFrame(() => {
+          p.style.opacity = '0';
+          p.style.transform = `translate(${(Math.random()-0.5)*12}px,${(Math.random()-0.5)*12}px)`;
+        });
+        setTimeout(() => { if (p.parentNode) p.parentNode.removeChild(p); }, 400);
+        if (trail.length > TRAIL_LEN * 3) {
+          const old = trail.shift();
+          if (old && old.parentNode) old.parentNode.removeChild(old);
+        }
+      }
+
+      let lastTrail = 0;
+      function animate(ts) {
+        rx = lerp(rx, mx, 0.18);
+        ry = lerp(ry, my, 0.18);
+        angle = lerpAngle(angle, targetAngle, 0.12);
+
+        const hw = canvas.width  / 2;
+        const hh = canvas.height / 2;
+        canvas.style.left = (rx - hw) + 'px';
+        canvas.style.top  = (ry - hh) + 'px';
+        canvas.style.transform = `rotate(${angle}deg)`;
+
+        if (ts - lastTrail > 40) {
+          const rad = (angle - 90) * Math.PI / 180;
+          const ex = rx + Math.cos(rad + Math.PI) * hh * 0.9;
+          const ey = ry + Math.sin(rad + Math.PI) * hh * 0.9;
+          spawnTrailPixel(ex, ey);
+          lastTrail = ts;
+        }
+
+        requestAnimationFrame(animate);
+      }
+      requestAnimationFrame(animate);
+    })();
+
+    // ---- Pixel stars ----
+    (function(){
+      const container=document.getElementById('bgParticles');
+      if(!container)return;
+      const colors=['#00E5FF','#4D9FFF','#1E5CFF','#FFD700','#00FF88'];
+      for(let i=0;i<40;i++){
+        const p=document.createElement('div');
+        const size=(Math.random()>0.5)?2:4;
+        const color=colors[Math.floor(Math.random()*colors.length)];
+        const dur=(2+Math.random()*4).toFixed(1);
+        const delay=-(Math.random()*4).toFixed(1);
+        p.style.cssText=`position:absolute;width:${size}px;height:${size}px;left:${Math.random()*100}%;top:${Math.random()*100}%;background:${color};box-shadow:0 0 ${size*2}px ${color};opacity:0;animation:pixelBlink ${dur}s ${delay}s infinite steps(2);`;
+        container.appendChild(p);
+      }
+      if(!document.getElementById('pixelBlink-style')){const s=document.createElement('style');s.id='pixelBlink-style';s.textContent='@keyframes pixelBlink{0%{opacity:0}50%{opacity:0.9}100%{opacity:0}}';document.head.appendChild(s);}
+    })();
+
+    // ---- Utils ----
+    function formatDate(iso){
+      if(!iso)return'N/A';
+      return new Intl.DateTimeFormat('en-US',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(iso));
+    }
+    function fmtMcap(v){
+      if(!v||v===0)return'N/A';
+      if(v>=1e9)return'$'+(v/1e9).toFixed(2)+'B';
+      if(v>=1e6)return'$'+(v/1e6).toFixed(2)+'M';
+      if(v>=1e3)return'$'+(v/1e3).toFixed(1)+'K';
+      return'$'+v.toFixed(0);
+    }
+    function timeAgo(iso){
+      const d=new Date(iso);
+      const diff=(Date.now()-d.getTime())/1000;
+      if(diff<3600)return Math.floor(diff/60)+'m ago';
+      if(diff<86400)return Math.floor(diff/3600)+'h ago';
+      return Math.floor(diff/86400)+'d ago';
+    }
+    function truncateCA(ca){if(!ca)return'';return ca.slice(0,6)+'...'+ca.slice(-4);}
+
+    // ---- Render call card ----
+    function renderCallCard(call) {
+      const isPumpFun = call.dex_url && call.dex_url.includes('pump.fun');
+      const symbol = call.token_symbol ? '$'+call.token_symbol : '???';
+      const name = call.token_name || (isPumpFun ? 'pump.fun token' : call.ca_address.slice(0,14)+'...');
+      const excerpt = call.msg_text ? call.msg_text.replace(/\n+/g,' ').slice(0,130) : '';
+      const ch = call.price_change_24h;
+      const chClass = ch>0?'up':ch<0?'down':'';
+      const chStr = ch?(ch>0?'+':'')+ch.toFixed(1)+'%':'N/A';
+
+      const athVal = call.ath_x || 0;
+      const minVal = call.min_x !== undefined ? call.min_x : 1.0;
+      let athHtml = '';
+      if (athVal > 1.01) {
+        const athClass = athVal >= 5 ? 'big moon' : athVal >= 2 ? 'big' : '';
+        athHtml = `<div class="call-ath ${athClass}">+${athVal.toFixed(2)}x</div>`;
+      } else if (minVal < 0.99) {
+        const lossPct = ((1 - minVal) * 100).toFixed(0);
+        const lossClass = minVal < 0.5 ? 'loss big' : 'loss';
+        athHtml = `<div class="call-ath ${lossClass}">-${lossPct}%</div>`;
+      } else {
+        athHtml = `<div class="call-ath tracking">TRACKING</div>`;
+      }
+
+      let footerRight;
+      if (isPumpFun) {
+        footerRight = `<a class="call-pumpfun-btn" href="${call.dex_url}" target="_blank" rel="noopener">[ PUMP.FUN ]</a>`;
+      } else if (call.dex_url) {
+        footerRight = `<a class="call-dex-btn" href="${call.dex_url}" target="_blank" rel="noopener">[ CHART ]</a>`;
+      } else {
+        footerRight = '<span class="call-date">NO PAIR</span>';
+      }
+
+      const card = document.createElement('div');
+      card.className = 'call-card' + (call.is_live ? ' is-live' : '');
+      card.innerHTML = `
+        <div class="call-card-header">
+          <div class="call-token-info">
+            <div class="call-symbol">${symbol}</div>
+            <div class="call-name">${name}</div>
+          </div>
+          ${call.is_live ? '<div class="call-live-badge">LIVE</div>' : ''}
+          ${athHtml}
+        </div>
+        ${excerpt ? `<div class="call-excerpt">${excerpt}</div>` : ''}
+        <div class="call-ca">
+          <span class="call-ca-addr" title="${call.ca_address}">${truncateCA(call.ca_address)}</span>
+          <button class="call-copy-btn" onclick="navigator.clipboard.writeText('${call.ca_address}').then(()=>this.textContent='OK!').catch(()=>{});event.stopPropagation()">COPY CA</button>
+        </div>
+        <div class="call-stats">
+          <div class="call-stat"><span>MCAP</span><span class="call-stat-val">${fmtMcap(call.current_mcap)}</span></div>
+          <div class="call-stat"><span>24H</span><span class="call-stat-val ${chClass}">${isPumpFun ? '<span class="call-pumpfun-badge">PUMP</span>' : chStr}</span></div>
+          <div class="call-stat"><span>VOL</span><span class="call-stat-val">${isPumpFun ? 'N/A' : fmtMcap(call.volume_24h)}</span></div>
+          <div class="call-stat"><span>LIQ</span><span class="call-stat-val">${isPumpFun ? 'N/A' : fmtMcap(call.liquidity_usd)}</span></div>
+        </div>
+        <div class="call-footer">
+          <span class="call-date">${timeAgo(call.msg_date)}</span>
+          ${footerRight}
+        </div>
+      `;
+      return card;
+    }
+
+    // ---- Load calls ----
+    async function loadGambleCalls() {
+      const dot = document.getElementById('gambleStatusDot');
+      const label = document.getElementById('gambleLastUpdated');
+      const liveEl = document.getElementById('gambleLiveCalls');
+      const oldEl = document.getElementById('gambleOldCalls');
+
+      try {
+        const res = await fetch(`${API_BASE}/gamble`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        if (dot) dot.className = 'dot green';
+        if (label) label.textContent = data.last_updated ? 'Updated ' + formatDate(data.last_updated) : 'LIVE';
+
+        const totalEl = document.getElementById('gambleTotalCount');
+        if (totalEl) totalEl.textContent = data.total + ' CALLS TRACKED';
+
+        const liveCount = document.getElementById('liveCount');
+        const oldCount = document.getElementById('oldCount');
+        if (liveCount) liveCount.textContent = (data.live||[]).length;
+        if (oldCount) oldCount.textContent = (data.old||[]).length;
+
+        // Deduplicate by ca_address: keep entry with best ath_x per CA
+        const dedupeByCA = arr => {
+          const map = new Map();
+          for (const c of arr) {
+            const key = c.ca_address || c.msg_id;
+            const prev = map.get(key);
+            if (!prev || (c.ath_x || 0) > (prev.ath_x || 0)) map.set(key, c);
+          }
+          return Array.from(map.values());
+        };
+
+        // Filter out pure TRACKING (no movement yet)
+        const hasMovement = c => (c.ath_x || 0) > 1.01 || (c.min_x !== undefined ? c.min_x : 1.0) < 0.99;
+        const liveCalls = dedupeByCA(data.live || []).filter(hasMovement);
+        const oldCalls  = dedupeByCA(data.old  || []).filter(hasMovement);
+
+        // Update tab badges
+        const liveTab = document.querySelector('[data-tab="live"]');
+        const oldTab = document.querySelector('[data-tab="old"]');
+        if (liveTab) liveTab.textContent = `LIVE CALLS (${liveCalls.length})`;
+        if (oldTab) oldTab.textContent = `OLD CALLS (${oldCalls.length})`;
+
+        // Render live
+        liveEl.innerHTML = '';
+        if (liveCalls.length > 0) {
+          liveCalls.forEach(c => liveEl.appendChild(renderCallCard(c)));
+        } else {
+          liveEl.innerHTML = '<div class="empty-calls">NO LIVE CALLS RIGHT NOW<br><br>CHECK BACK SOON</div>';
+        }
+
+        // Render old
+        oldEl.innerHTML = '';
+        if (oldCalls.length > 0) {
+          oldCalls.forEach(c => oldEl.appendChild(renderCallCard(c)));
+        } else {
+          oldEl.innerHTML = '<div class="empty-calls">NO ARCHIVED CALLS</div>';
+        }
+
+      } catch (err) {
+        console.error('Gamble fetch error:', err);
+        if (dot) dot.className = 'dot red';
+        if (label) label.textContent = 'ERROR';
+        liveEl.innerHTML = '<div class="empty-calls">API UNAVAILABLE</div>';
+      }
+    }
+
+    // ---- Tabs ----
+    document.querySelectorAll('.gamble-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.gamble-tab').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      });
+    });
+
+    // ---- Init ----
+    loadGambleCalls();
+    setInterval(loadGambleCalls, REFRESH_INTERVAL);
+  </script>
+</body>
+</html>
