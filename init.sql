@@ -78,11 +78,27 @@ CREATE TABLE IF NOT EXISTS gamble_calls (
     price_change_24h DOUBLE PRECISION,
     dex_url          TEXT,
     is_live          BOOLEAN DEFAULT FALSE,
-    updated_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    updated_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    pair_address     VARCHAR(128),
+    ath_atl_final    BOOLEAN DEFAULT FALSE,
+    min_x            DOUBLE PRECISION DEFAULT 1.0
 );
 
 CREATE INDEX IF NOT EXISTS idx_gamble_calls_date ON gamble_calls(msg_date DESC);
 CREATE INDEX IF NOT EXISTS idx_gamble_calls_ca   ON gamble_calls(ca_address);
+
+-- Migrations: add columns if not exist (for existing databases)
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gamble_calls' AND column_name='pair_address') THEN
+        ALTER TABLE gamble_calls ADD COLUMN pair_address VARCHAR(128);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gamble_calls' AND column_name='ath_atl_final') THEN
+        ALTER TABLE gamble_calls ADD COLUMN ath_atl_final BOOLEAN DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gamble_calls' AND column_name='min_x') THEN
+        ALTER TABLE gamble_calls ADD COLUMN min_x DOUBLE PRECISION DEFAULT 1.0;
+    END IF;
+END $$;
 
 -- Seed contest placeholder
 INSERT INTO contest_info (title, description, prize_pool, is_active)

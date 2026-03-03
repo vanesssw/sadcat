@@ -77,6 +77,7 @@ docker compose -f docker-compose.prod.yml run --rm certbot \
     --email "${EMAIL}" \
     --agree-tos \
     --no-eff-email \
+    --preferred-challenges http \
     -d "${DOMAIN}" \
     -d "www.${DOMAIN}"
 
