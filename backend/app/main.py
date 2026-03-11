@@ -633,7 +633,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
 
     # Connect Telegram client
-    if settings.enable_telegram:
+    if getattr(settings, "enable_telegram", True):
         try:
             await telegram_parser.start()
             logger.info("Telegram client ready")
@@ -721,7 +721,10 @@ async def lifespan(app: FastAPI):
 
     # ---- Shutdown ----
     scheduler.shutdown(wait=False)
-    await telegram_parser.stop()
+    try:
+        await telegram_parser.stop()
+    except Exception:
+        pass
     await engine.dispose()
     logger.info("App shutdown complete")
 
