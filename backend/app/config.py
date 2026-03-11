@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     secret_key: str = "change_me"
     leaderboard_update_interval: int = 300  # seconds
 
+    # Random.org
+    random_org_api_key: str = ""
+
     @property
     def database_url(self) -> str:
         return (

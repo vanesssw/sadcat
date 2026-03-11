@@ -1,2 +1,0 @@
-SESSION: C:\Users\User\Desktop\some code\sadcat\sessions\sadcat_session
-Telethon sync imported OK

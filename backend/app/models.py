@@ -5,6 +5,37 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
+class WheelSpin(Base):
+    __tablename__ = "wheel_spins"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)  # ok / failed
+    error_msg: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Wheel config snapshot
+    wheel_version_hash: Mapped[Optional[str]] = mapped_column(String(64))   # sha256 of participants JSON
+    total_tickets: Mapped[Optional[int]] = mapped_column(Integer)
+    participants_json: Mapped[Optional[dict]] = mapped_column(JSON)          # [{name, tickets, ...}]
+
+    # Draw result
+    winning_ticket: Mapped[Optional[int]] = mapped_column(Integer)
+    winner_username: Mapped[Optional[str]] = mapped_column(String(255))
+    winner_name: Mapped[Optional[str]] = mapped_column(String(255))
+    winner_avatar: Mapped[Optional[str]] = mapped_column(Text)               # base64
+    winner_color: Mapped[Optional[str]] = mapped_column(String(16))
+    winner_tickets: Mapped[Optional[int]] = mapped_column(Integer)
+    winner_chance: Mapped[Optional[float]] = mapped_column(Float)
+    winner_range_start: Mapped[Optional[int]] = mapped_column(Integer)
+    winner_range_end: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # random.org proof
+    rand_serial: Mapped[Optional[int]] = mapped_column(Integer)
+    rand_signature: Mapped[Optional[str]] = mapped_column(Text)
+    rand_random: Mapped[Optional[dict]] = mapped_column(JSON)                # object from random.org
+    verify_url: Mapped[Optional[str]] = mapped_column(Text)
+
+
 class LeaderboardEntry(Base):
     __tablename__ = "leaderboard"
 

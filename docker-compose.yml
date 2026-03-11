@@ -25,7 +25,7 @@ services:
     environment:
       POSTGRES_HOST: db
     volumes:
-      - tg_sessions:/app/sessions
+      - ./.sessions:/app/sessions
     depends_on:
       db:
         condition: service_healthy
@@ -38,10 +38,9 @@ services:
       dockerfile: nginx/Dockerfile
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8000:80"
     depends_on:
       - backend
 
 volumes:
   pg_data:
-  tg_sessions:

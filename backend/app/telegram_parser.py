@@ -145,6 +145,20 @@ class TelegramParser:
 
         return entries
 
+    def preload_avatar_cache(self, avatar_map: dict) -> None:
+        """
+        Pre-populate the in-memory avatar cache from DB data.
+        Call once on startup so restart doesn't re-download all avatars.
+        avatar_map: {username: base64_str}  (None values are skipped)
+        """
+        loaded = 0
+        for username, b64 in avatar_map.items():
+            if b64 and username and username not in self._avatar_cache:
+                self._avatar_cache[username] = b64
+                loaded += 1
+        if loaded:
+            logger.info("Avatar cache pre-loaded: %d entries from DB", loaded)
+
     async def _get_avatar(self, username: str) -> str | None:
         """Download Telegram profile photo and return as base64 string."""
         # Use cache to avoid re-downloading every update

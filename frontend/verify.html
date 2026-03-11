@@ -1,0 +1,148 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SADCAT  Verify Draw</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    body { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; padding:2rem; }
+    .vbox { max-width:580px; width:100%; font-family:var(--font-pixel,monospace); text-align:center; }
+    .vtitle { font-size:13px; color:var(--cyan,#00E5FF); letter-spacing:3px; margin-bottom:24px; }
+    .vstatus { font-size:9px; letter-spacing:1px; margin-bottom:20px; min-height:18px; }
+    .spin { animation:spin 1s linear infinite; display:inline-block; }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
+
+    .winner-card {
+      border:2px solid var(--cyan,#00E5FF);
+      background:rgba(0,229,255,0.04);
+      padding:20px 24px 16px;
+      margin-bottom:16px;
+      text-align:center;
+    }
+    .winner-avatar-wrap { margin-bottom:12px; }
+    .winner-avatar { width:56px; height:56px; border-radius:50%; border:2px solid var(--cyan,#00E5FF); }
+    .winner-avatar-ph { width:56px; height:56px; border-radius:50%; border:2px solid var(--cyan,#00E5FF); display:inline-flex; align-items:center; justify-content:center; font-size:22px; color:#fff; }
+    .winner-name { font-size:13px; color:#fff; letter-spacing:2px; margin-bottom:4px; }
+    .winner-handle { font-size:8px; color:var(--cyan,#00E5FF); margin-bottom:14px; }
+    .winner-ticket { font-size:10px; color:#FFD700; letter-spacing:1px; }
+
+    .proof-card {
+      border:1px solid rgba(0,229,255,0.25);
+      padding:16px 20px;
+      margin-bottom:16px;
+      text-align:left;
+    }
+    .proof-valid   { border-color:#00ff88; background:rgba(0,255,136,0.04); }
+    .proof-invalid { border-color:#ff4466; background:rgba(255,68,102,0.04); }
+    .proof-badge { font-size:10px; letter-spacing:2px; margin-bottom:14px; display:block; text-align:center; }
+    .proof-badge.ok  { color:#00ff88; }
+    .proof-badge.err { color:#ff4466; }
+    .proof-row { display:flex; justify-content:space-between; font-size:8px; margin-bottom:7px; gap:12px; }
+    .proof-label { color:var(--text-muted,#888); white-space:nowrap; }
+    .proof-val   { color:var(--cyan,#00E5FF); word-break:break-all; text-align:right; }
+    .proof-val.gold { color:#FFD700; }
+    .sig-block { font-size:6.5px; color:#555; word-break:break-all; margin-top:10px; border-top:1px dashed rgba(255,255,255,0.08); padding-top:8px; line-height:1.7; }
+    .verr { font-size:8px; color:#ff4466; border:1px dashed #ff4466; padding:12px; margin-bottom:16px; }
+    .back { display:inline-block; margin-top:6px; font-size:8px; color:var(--cyan,#00E5FF); text-decoration:none; border:1px dashed rgba(0,229,255,0.35); padding:6px 20px; }
+    .back:hover { border-color:var(--cyan,#00E5FF); }
+  </style>
+</head>
+<body>
+  <div class="vbox">
+    <div class="vtitle">[ DRAW VERIFICATION ]</div>
+    <div class="vstatus" id="status">
+      <span class="spin" style="color:var(--cyan,#00E5FF)">+</span>
+      <span style="color:var(--cyan,#00E5FF)"> LOADING...</span>
+    </div>
+    <div id="area"></div>
+    <a class="back" href="/wheel">BACK TO WHEEL</a>
+  </div>
+
+  <script>
+  (async function(){
+    const status = document.getElementById('status');
+    const area   = document.getElementById('area');
+
+    function st(txt, c){ status.innerHTML = '<span style="color:'+(c||'var(--cyan,#00E5FF)')+'">'+txt+'</span>'; }
+    function err(msg){ st(''); area.innerHTML = '<div class="verr">'+msg+'</div>'; }
+
+    try {
+      // Support /verify?spin=N for a specific historical spin
+      const spinId = new URLSearchParams(location.search).get('spin');
+      const apiUrl = spinId ? '/api/wheel/spin/' + spinId : '/api/wheel/state';
+
+      const res = await fetch(apiUrl);
+      if(!res.ok) throw new Error('API ' + res.status + (res.status===404?' — spin not found':''));
+      const s = await res.json();
+
+      if(!s.randorg_signed){
+        err('NO SIGNED DATA YET — run a wheel spin first.');
+        return;
+      }
+
+      st('VERIFYING WITH RANDOM.ORG...', '#00ff88');
+
+      const randomObj = s.randorg_signed.random;
+      const signature = s.randorg_signed.signature;
+
+      const vr = await fetch('https://api.random.org/json-rpc/4/invoke',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({jsonrpc:'2.0',method:'verifySignature',params:{random:randomObj,signature},id:1})
+      });
+      const vd = await vr.json();
+      if(vd.error){ err('RANDOM.ORG: '+vd.error.message); return; }
+
+      const ok      = vd.result && vd.result.authenticity === true;
+      const ticket  = randomObj.data && randomObj.data[0];
+      const total   = s.total_tickets || randomObj.max;
+      const serial  = randomObj.serialNumber;
+      const genTime = randomObj.completionTime;
+      const spinAt  = s.created_at || s.spin_at;
+
+      st('');
+
+      // Winner block
+      const avatar = s.winner_avatar
+        ? '<img class="winner-avatar" src="data:image/jpeg;base64,'+s.winner_avatar+'" />'
+        : '<div class="winner-avatar-ph" style="background:'+(s.winner_color||'#1e3a8a')+'22;border-color:'+(s.winner_color||'#00E5FF')+'">'+(s.winner_name||'?').slice(0,1)+'</div>';
+
+      let html = '<div class="winner-card">';
+      if(s.id) html += '<div style="font-size:7px;color:#555;margin-bottom:8px;letter-spacing:2px">DRAW #'+s.id+'</div>';
+      html += '<div class="winner-avatar-wrap">'+avatar+'</div>';
+      html += '<div class="winner-name">'+(s.winner_name||'UNKNOWN')+'</div>';
+      if(s.winner_username) html += '<div class="winner-handle">@'+s.winner_username+'</div>';
+      html += '<div class="winner-ticket">TICKET #'+ticket+' / '+total;
+      if(s.winner_chance) html += ' &nbsp;|&nbsp; '+s.winner_chance+'% CHANCE';
+      html += '</div></div>';
+
+      // Proof block
+      html += '<div class="proof-card '+(ok?'proof-valid':'proof-invalid')+'">';
+      html += '<span class="proof-badge '+(ok?'ok':'err')+'">'+(ok?'✓ SIGNATURE VALID — AUTHENTIC':'✗ SIGNATURE INVALID')+'</span>';
+      html += '<div class="proof-row"><span class="proof-label">WINNING NUMBER</span><span class="proof-val gold">'+(ticket||'?')+' of '+total+'</span></div>';
+      if(s.winner_range_start && s.winner_range_end) {
+        html += '<div class="proof-row"><span class="proof-label">WINNER RANGE</span><span class="proof-val">#'+s.winner_range_start+'–#'+s.winner_range_end+'</span></div>';
+      }
+      html += '<div class="proof-row"><span class="proof-label">SERIAL #</span><span class="proof-val">'+serial+'</span></div>';
+      html += '<div class="proof-row"><span class="proof-label">GENERATED AT</span><span class="proof-val">'+genTime+'</span></div>';
+      if(s.wheel_version_hash) html += '<div class="proof-row"><span class="proof-label">WHEEL HASH</span><span class="proof-val" style="font-size:6.5px">'+s.wheel_version_hash+'</span></div>';
+      html += '<div class="proof-row"><span class="proof-label">SOURCE</span><span class="proof-val">random.org Signed API</span></div>';
+      html += '<div class="proof-row"><span class="proof-label">VERIFIED BY</span><span class="proof-val">verifySignature JSON-RPC</span></div>';
+      html += '<div class="sig-block">SIG: '+signature+'</div>';
+      html += '</div>';
+
+      // Direct link to random.org signature form
+      const directSpinId = spinId || s.spin_id || s.id;
+      if(directSpinId) {
+        html += '<a class="back" style="margin-top:8px;border-color:'+(ok?'#00ff88':'#ff4466')+';color:'+(ok?'#00ff88':'#ff4466')+'" href="/api/wheel/verify/'+directSpinId+'" target="_blank" rel="noopener">'
+              + 'OPEN ON RANDOM.ORG &rarr;</a>';
+      }
+
+      area.innerHTML = html;
+
+    } catch(e){ err('ERROR: '+e.message); }
+  })();
+  </script>
+</body>
+</html>

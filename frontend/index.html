@@ -18,16 +18,17 @@
   <header class="header">
     <div class="header-inner">
       <div class="logo">
-        <div class="logo-text">
+        <a class="logo-text" href="/" style="text-decoration:none">
           <span class="logo-title">SADCAT</span>
           <span class="logo-sub">MONI RUSH</span>
-        </div>
+        </a>
       </div>
       <nav class="nav">
         <a class="nav-link active" href="#rules">[ RULES ]</a>
         <a class="nav-link" href="#leaderboard">[ SCORES ]</a>
         <a class="nav-link" href="#refleaderboard">[ REFS ]</a>
         <a class="nav-link" href="/gamble">[ GAMBLE ]</a>
+        <a class="nav-link nav-wheel" href="/wheel" style="opacity:.45;pointer-events:none;cursor:default;">[ WHEEL ]</a>
         <a class="nav-link nav-tg" href="https://t.me/sadcatgamble" target="_blank" rel="noopener">[ TG ]</a>
       </nav>
     </div>
@@ -78,9 +79,35 @@
           </div>
         </div>
       </div>
+
     </section>
 
-    <!-- Leaderboard -->
+    <!-- Raffle Winners -->
+    <section class="prize-section">
+      <div class="container">
+        <div class="raffle-winners">
+          <div class="rw-title">&gt; LAST RAFFLE WINNERS_</div>
+          <div class="rw-list" id="raffleWinnersList">
+            <div class="rw-empty">NO WINNERS YET</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Wheel Promo Banner -->
+    <section class="wheel-promo">
+      <div class="container">
+        <div class="wheel-promo-inner">
+          <div class="wheel-promo-left">
+            <div class="wheel-promo-label">WEEKLY RAFFLE</div>
+            <div class="wheel-promo-title">WIN <span class="wheel-promo-sol">10 SOL</span></div>
+            <div class="wheel-promo-sub">Coming soon &mdash; stay tuned!</div>
+          </div>
+          <span class="btn btn-wheel" style="opacity:.45;cursor:default;">[ COMING SOON ]</span>
+        </div>
+      </div>
+    </section>
+
     <section class="section" id="leaderboard">
       <div class="container">
         <div class="section-header">

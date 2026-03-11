@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WHEEL</title>
+  <link rel="icon" type="image/png" href="/png/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    /* ── page layout ── */
+    main { max-width: 1200px; margin: 0 auto; padding: 32px 16px 80px; position: relative; z-index: 1; }
+
+    /* ── hero info ── */
+    .wheel-top { text-align: center; margin-bottom: 28px; }
+    .wheel-page-title { font-size: 18px; color: var(--gold); text-shadow: 0 0 16px var(--gold); margin-bottom: 12px; line-height: 1.6; }
+    .wheel-page-sub { font-size: 8px; color: var(--text-dim); line-height: 2.2; }
+    .prize-badge { display: inline-block; background: linear-gradient(135deg,#7b5800,#ffd700,#7b5800); color:#000; font-size:14px; padding:10px 28px; margin:12px 0; border:2px solid var(--gold); box-shadow:0 0 20px var(--gold); }
+
+    /* ── info cards ── */
+    .info-cards { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-bottom:28px; }
+    .info-card { background:var(--bg-2); border:1px solid var(--border-dim); padding:14px 20px; text-align:center; min-width:140px; }
+    .info-card .ic-label { font-size:7px; color:var(--text-dim); margin-bottom:8px; }
+    .info-card .ic-val { font-size:11px; color:var(--gold); }
+
+    /* ── timer ── */
+    .timer-wrap { text-align:center; margin-bottom:28px; }
+    .timer-label { font-size:8px; color:var(--text-dim); margin-bottom:8px; }
+    .timer-display { font-size:28px; color:var(--cyan); text-shadow:0 0 12px var(--cyan); letter-spacing:4px; }
+    .timer-display.urgent { color:#ff1744; text-shadow:0 0 12px #ff1744; animation:blink .5s step-end infinite; }
+    @keyframes blink { 50%{opacity:0;} }
+
+    /* ═══════════════════════════════════════
+       ROULETTE STRIP
+    ═══════════════════════════════════════ */
+    .roulette-wrap {
+      position: relative;
+      width: 100%;
+      margin-bottom: 40px;
+    }
+
+    /* top & bottom gold pointer arrows */
+    .roulette-wrap::before, .roulette-wrap::after {
+      content: '';
+      position: absolute;
+      left: 50%; transform: translateX(-50%);
+      z-index: 20;
+      width: 0; height: 0;
+      pointer-events: none;
+    }
+    .roulette-wrap::before {
+      top: -14px;
+      border-left: 12px solid transparent; border-right: 12px solid transparent;
+      border-top: 18px solid var(--gold);
+      filter: drop-shadow(0 0 6px var(--gold));
+    }
+    .roulette-wrap::after {
+      bottom: -14px;
+      border-left: 12px solid transparent; border-right: 12px solid transparent;
+      border-bottom: 18px solid var(--gold);
+      filter: drop-shadow(0 0 6px var(--gold));
+    }
+
+    /* vertical center line */
+    .roulette-line {
+      position: absolute; top: 0; bottom: 0;
+      left: 50%; transform: translateX(-50%);
+      width: 3px;
+      background: linear-gradient(to bottom, transparent, var(--gold) 20%, var(--gold) 80%, transparent);
+      box-shadow: 0 0 12px var(--gold);
+      z-index: 20; pointer-events: none;
+    }
+
+    /* fade edges */
+    .roulette-fade-l, .roulette-fade-r {
+      position: absolute; top: 0; bottom: 0; width: 120px;
+      z-index: 15; pointer-events: none;
+    }
+    .roulette-fade-l { left: 0;  background: linear-gradient(to right, var(--bg), transparent); }
+    .roulette-fade-r { right: 0; background: linear-gradient(to left,  var(--bg), transparent); }
+
+    .roulette-track {
+      overflow: hidden;
+      border: 2px solid var(--border);
+      box-shadow: 0 0 24px rgba(30,92,255,.3), inset 0 0 40px rgba(0,0,0,.5);
+      background: var(--bg-2);
+      height: 160px;
+    }
+    .roulette-inner {
+      display: flex;
+      align-items: center;
+      height: 100%;
+      gap: 6px;
+      padding: 0 6px;
+      will-change: transform;
+      /* no transition here — JS handles it */
+    }
+
+    /* individual player card */
+    .r-card {
+      flex-shrink: 0;
+      width: 128px; height: 144px;
+      background: var(--bg-3, #0B1330);
+      border: 2px solid rgba(30,92,255,.4);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 6px;
+      font-size: 6px;
+      transition: border-color .2s, box-shadow .2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .r-card::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,.03), transparent);
+    }
+    .r-card.winner {
+      border-color: var(--gold) !important;
+      box-shadow: 0 0 24px var(--gold), inset 0 0 20px rgba(255,215,0,.15) !important;
+      animation: winPulse .5s ease-in-out 3;
+    }
+    @keyframes winPulse { 0%,100%{box-shadow:0 0 24px var(--gold);} 50%{box-shadow:0 0 48px var(--gold), 0 0 80px rgba(255,215,0,.4);} }
+
+    .r-card-avatar {
+      width: 64px; height: 64px;
+      border-radius: 50%;
+      border: 2px solid rgba(30,92,255,.6);
+      object-fit: cover;
+      image-rendering: pixelated;
+      background: var(--bg-3);
+    }
+    .r-card-avatar.no-pic {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; border-radius: 50%;
+    }
+    .r-card-name {
+      font-size: 7px; color: var(--text);
+      text-align: center; width: 112px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .r-card-tickets {
+      font-size: 6px; color: var(--gold);
+    }
+
+    /* ── participants table ── */
+    .participants-wrap { margin-top: 8px; }
+    .part-title { font-size: 9px; color: var(--cyan); border-bottom:1px solid var(--border-dim); padding-bottom:10px; margin-bottom:12px; }
+    .part-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:6px; }
+    .part-row { display:flex; align-items:center; gap:8px; padding:7px 10px; background:var(--bg-2); border:1px solid var(--border-dim); font-size:7px; }
+    .part-rank { width:18px; color:var(--text-dim); text-align:right; flex-shrink:0; }
+    .part-ava { width:28px; height:28px; border-radius:50%; object-fit:cover; flex-shrink:0; background:var(--bg-3); }
+    .part-ava-ph { width:28px; height:28px; border-radius:50%; background:var(--bg-3); display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+    .part-info { flex:1; min-width:0; }
+    .part-name { color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .part-tickets { color:var(--gold); font-size:6px; margin-top:2px; }
+    .part-chance { color:var(--text-dim); flex-shrink:0; }
+    .total-tickets-info { font-size:7px; color:var(--text-dim); margin-top:12px; text-align:right; }
+
+    /* ── winner modal ── */
+    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.88); z-index:200; align-items:center; justify-content:center; }
+    .modal-overlay.show { display:flex; }
+    .modal-box {
+      background:var(--bg-2); border:2px solid var(--gold);
+      box-shadow:0 0 40px var(--gold), 0 0 80px rgba(255,215,0,.3);
+      padding:40px 48px; text-align:center; max-width:480px; width:90%;
+      animation:modalIn .4s cubic-bezier(.34,1.56,.64,1);
+    }
+    @keyframes modalIn { from{transform:scale(.5);opacity:0;} to{transform:scale(1);opacity:1;} }
+    .modal-crown { font-size:40px; margin-bottom:16px; }
+    .modal-title  { font-size:10px; color:var(--gold); margin-bottom:16px; text-shadow:0 0 12px var(--gold); }
+    .modal-avatar { width:88px; height:88px; border-radius:50%; border:3px solid var(--gold); object-fit:cover; margin-bottom:14px; box-shadow:0 0 20px var(--gold); }
+    .modal-avatar-ph { width:88px; height:88px; border-radius:50%; border:3px solid var(--gold); display:inline-flex; align-items:center; justify-content:center; font-size:44px; margin-bottom:14px; }
+    .modal-winner { font-size:16px; color:#fff; margin-bottom:10px; text-shadow:0 0 16px var(--cyan); overflow-wrap:break-word; }
+    .modal-sub    { font-size:7px; color:var(--text-dim); line-height:2; margin-bottom:20px; }
+    .modal-prize  { font-size:18px; color:var(--gold); margin-bottom:20px; text-shadow:0 0 12px var(--gold); }
+    /* ── lottery ticket stub ── */
+    .modal-ticket-stub {
+      border: 2px dashed var(--cyan);
+      background: rgba(0,229,255,0.06);
+      padding: 14px 20px;
+      margin: 0 0 12px;
+      position: relative;
+    }
+    .modal-ticket-stub::before, .modal-ticket-stub::after {
+      content:''; position:absolute; top:50%; width:10px; height:10px;
+      background:var(--bg-1); border-radius:50%; transform:translateY(-50%);
+      border:2px dashed var(--cyan);
+    }
+    .modal-ticket-stub::before { left:-7px; }
+    .modal-ticket-stub::after  { right:-7px; }
+    .modal-ticket-num  { font-family:var(--font-pixel); font-size:22px; color:var(--cyan); text-shadow:0 0 16px var(--cyan),0 0 32px rgba(0,229,255,0.4); letter-spacing:3px; margin-bottom:4px; }
+    .modal-ticket-range{ font-family:var(--font-pixel); font-size:7px; color:var(--text-muted); letter-spacing:1px; }
+    .modal-proof  { display:inline-block; font-family:var(--font-pixel); font-size:7px; color:var(--cyan); text-decoration:none; border:1px solid rgba(0,229,255,0.4); padding:6px 14px; margin-bottom:20px; }
+    .modal-proof:hover { background:rgba(0,229,255,0.12); }
+    .modal-close  { font-family:var(--font-pixel); font-size:8px; background:none; border:1px solid var(--gold); color:var(--gold); padding:10px 24px; cursor:none; }
+    .modal-close:hover { background:var(--gold); color:#000; }
+
+    .loading-roulette { text-align:center; padding:60px 20px; font-size:9px; color:var(--text-dim); }
+    .sparkle-container { position:fixed; inset:0; pointer-events:none; z-index:199; }
+  </style>
+</head>
+<body>
+  <div class="scanlines"></div>
+  <div class="bg-grid" id="bgParticles"></div>
+  <div class="sparkle-container" id="sparkleContainer"></div>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="winnerModal">
+    <div class="modal-box">
+      <div class="modal-crown">[ WIN ]</div>
+      <div class="modal-title">WINNER!</div>
+      <div id="modalAvatarWrap"></div>
+      <div class="modal-winner" id="winnerName">---</div>
+      <div class="modal-sub" id="winnerSub">tickets · chance</div>
+      <div class="modal-prize">PRIZE: 10 SOL</div>
+      <div class="modal-ticket-stub" id="winnerTicketStub" style="display:none">
+        <div class="modal-ticket-num" id="winnerTicketNum"></div>
+        <div class="modal-ticket-range" id="winnerTicketRange"></div>
+      </div>
+      <a class="modal-proof" id="winnerProof" href="#" target="_blank" rel="noopener" style="display:none">[ VERIFY ON RANDOM.ORG ]</a>
+      <button class="modal-close" id="modalClose">[ CLOSE ]</button>
+    </div>
+  </div>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <a class="logo-text" href="/" style="text-decoration:none">
+          <span class="logo-title">SADCAT</span>
+          <span class="logo-sub">MONI RUSH</span>
+        </a>
+      </div>
+      <nav class="nav">
+        <a class="nav-link" href="/">[ HOME ]</a>
+        <a class="nav-link" href="/gamble">[ GAMBLE ]</a>
+        <a class="nav-link nav-wheel active" href="/wheel">[ WHEEL ]</a>
+        <a class="nav-link nav-tg" href="https://t.me/sadcatgamble" target="_blank" rel="noopener">[ TG ]</a>
+      </nav>
+    </div>
+  </header>
+
+<main>
+  <div class="wheel-top">
+    <div class="wheel-page-title">SPIN THE WHEEL</div>
+    <div class="prize-badge">PRIZE: 10 SOL</div>
+    <div class="wheel-page-sub">
+      BUY TICKETS FOR POINTS · MAX 100 TICKETS PER PLAYER<br>
+      1 TICKET = 100 POINTS · MORE TICKETS = MORE CHANCES<br>
+      WHEEL SPINS EVERY 5 MINUTES
+    </div>
+  </div>
+
+  <div class="info-cards">
+    <div class="info-card">
+      <div class="ic-label">TICKET PRICE</div>
+      <div class="ic-val">100 PTS</div>
+    </div>
+    <div class="info-card">
+      <div class="ic-label">MAX TICKETS</div>
+      <div class="ic-val">100</div>
+    </div>
+    <div class="info-card">
+      <div class="ic-label">PRIZE POOL</div>
+      <div class="ic-val">10 SOL</div>
+    </div>
+    <div class="info-card">
+      <div class="ic-label">NEXT SPIN IN</div>
+      <div class="ic-val" id="cardTimer">--:--</div>
+    </div>
+  </div>
+
+  <div class="timer-wrap">
+    <div class="timer-label">NEXT SPIN IN</div>
+    <div class="timer-display" id="timerDisplay">--:--</div>
+  </div>
+
+  <a id="pageProofLink" class="page-proof-link" href="#" target="_blank" rel="noopener" style="display:none">
+    [ VERIFY LAST DRAW ON RANDOM.ORG ]
+  </a>
+
+  <!-- ROULETTE -->
+  <div class="roulette-wrap">
+    <div class="roulette-track" id="rouletteTrack">
+      <div class="roulette-inner" id="rouletteInner">
+        <div class="loading-roulette">LOADING PLAYERS...</div>
+      </div>
+    </div>
+    <div class="roulette-line"></div>
+    <div class="roulette-fade-l"></div>
+    <div class="roulette-fade-r"></div>
+  </div>
+
+  <!-- PARTICIPANTS TABLE -->
+  <div class="participants-wrap">
+    <div class="part-title">TOP 20 PARTICIPANTS</div>
+    <div class="part-grid" id="participantsList"></div>
+    <div class="total-tickets-info" id="totalTicketsInfo"></div>
+  </div>
+</main>
+
+<script src="js/wheel.js"></script>
+<script type="text/x-removed">
+<!-- This block is intentionally disabled. All logic is in js/wheel.js -->
+const CARD_W      = 134;   // DUMMY removed
+const TOP_N       = 20;    // take top-N from leaderboard
+const POOL_REPS   = 7;     // how many full pools in the strip
+const SPIN_MS     = 6000;  // spin duration ms
+const SPIN_SECONDS = 5 * 60; // countdown interval
+
+const SEG_COLORS = [
+  '#0066ff','#00ccff','#9900ff','#ff6600','#00cc44',
+  '#ff0066','#ffcc00','#00ffcc','#ff3300','#6600ff',
+  '#00ff66','#ff9900','#3366ff','#ff0099','#33ff00',
+  '#ff3366','#00ff99','#cc00ff','#ff9966','#0099ff',
+];
+
+let PARTICIPANTS  = [];
+let totalTickets  = 0;
+let spinning      = false;
+let autoSpun      = false;
+let stripData     = [];
+let winnerCardIdx = 0;
+
+// ── Load top-20 from /api/leaderboard ─────────────────────────────────────────
+async function loadParticipants() {
+  try {
+    const res  = await fetch('/api/leaderboard');
+    const data = await res.json();
+    const top  = (data.entries || []).slice(0, TOP_N);
+    if (!top.length) throw new Error('empty');
+
+    const maxScore = top[0].score || 1;
+    PARTICIPANTS = top.map((e, i) => ({
+      name:     e.display_name || e.username || ('Player ' + (i + 1)),
+      username: e.username,
+      tickets:  Math.max(1, Math.round((e.score / maxScore) * 100)),
+      avatar:   e.avatar_b64 ? 'data:image/jpeg;base64,' + e.avatar_b64 : null,
+      color:    SEG_COLORS[i % SEG_COLORS.length],
+    }));
+    totalTickets = PARTICIPANTS.reduce((s, p) => s + p.tickets, 0);
+
+  } catch (err) {
+    console.warn('Leaderboard unavailable, using placeholders:', err);
+    // Fallback: 20 placeholder players
+    PARTICIPANTS = Array.from({ length: 20 }, (_, i) => ({
+      name:     'Player ' + (i + 1),
+      username: '',
+      tickets:  Math.max(1, 100 - i * 4),
+      avatar:   null,
+      color:    SEG_COLORS[i % SEG_COLORS.length],
+    }));
+    totalTickets = PARTICIPANTS.reduce((s, p) => s + p.tickets, 0);
+  }
+  buildRoulette();
+  renderParticipants();
+}
+
+// ── Build weighted pool (shuffle) ─────────────────────────────────────────────
+function makePool() {
+  const pool = [];
+  PARTICIPANTS.forEach(p => {
+    const slots = Math.max(1, Math.round(10 * p.tickets / 100));
+    for (let i = 0; i < slots; i++) pool.push(p);
+  });
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool;
+}
+
+// ── Create single roulette card ───────────────────────────────────────────────
+function makeCard(p) {
+  const el = document.createElement('div');
+  el.className = 'r-card';
+  el.style.borderColor = p.color + '88';
+  const initials = p.name.slice(0, 1).toUpperCase();
+  const avaHtml = p.avatar
+    ? `<img class="r-card-avatar" src="${p.avatar}" alt="" />`
+    : `<div class="r-card-avatar no-pic" style="background:${p.color}22;border-color:${p.color}">${initials}</div>`;
+  el.innerHTML = `
+    ${avaHtml}
+    <div class="r-card-name">${p.name}</div>
+    <div class="r-card-tickets">${p.tickets} TICKETS</div>`;
+  return el;
+}
+
+// ── Build the full strip (POOL_REPS copies) ───────────────────────────────────
+function buildRoulette() {
+  const inner = document.getElementById('rouletteInner');
+  inner.innerHTML = '';
+  inner.style.transition = 'none';
+  inner.style.transform  = 'translateX(0)';
+  stripData = [];
+  for (let rep = 0; rep < POOL_REPS; rep++) {
+    makePool().forEach(p => {
+      stripData.push(p);
+      inner.appendChild(makeCard(p));
+    });
+  }
+}
+
+// ── Weighted random winner ────────────────────────────────────────────────────
+function pickWinner() {
+  const r = Math.random() * totalTickets;
+  let acc = 0;
+  for (const p of PARTICIPANTS) {
+    acc += p.tickets;
+    if (r < acc) return p;
+  }
+  return PARTICIPANTS[PARTICIPANTS.length - 1];
+}
+
+// ── Spin! ─────────────────────────────────────────────────────────────────────
+function doSpin() {
+  if (spinning || !PARTICIPANTS.length) return;
+  spinning = true;
+
+  const winner = pickWinner();
+
+  // Rebuild strip so winner lands under the pointer in the last third
+  const inner = document.getElementById('rouletteInner');
+  inner.innerHTML = '';
+  inner.style.transition = 'none';
+  inner.style.transform  = 'translateX(0)';
+  stripData = [];
+
+  for (let rep = 0; rep < POOL_REPS - 1; rep++) {
+    makePool().forEach(p => { stripData.push(p); inner.appendChild(makeCard(p)); });
+  }
+
+  // Final pool: insert winner at 60-85% through the last pool
+  const finalPool = makePool();
+  const insertAt  = Math.floor(finalPool.length * 0.6 + Math.random() * finalPool.length * 0.25);
+  finalPool.splice(insertAt, 0, winner);
+  finalPool.forEach(p => { stripData.push(p); inner.appendChild(makeCard(p)); });
+
+  // Find the exact index of the winner card we just inserted
+  const winnerAbsIdx = (POOL_REPS - 1) * makePool().length + insertAt;
+  // safer: scan from end
+  let wIdx = -1;
+  for (let i = stripData.length - 1; i >= 0; i--) {
+    if (stripData[i] === winner) { wIdx = i; break; }
+  }
+  // prefer one within last 40% of strip
+  const cutoff = Math.floor(stripData.length * 0.6);
+  let candidates = [];
+  for (let i = cutoff; i < stripData.length; i++) {
+    if (stripData[i] === winner) candidates.push(i);
+  }
+  if (candidates.length) wIdx = candidates[Math.floor(Math.random() * candidates.length)];
+
+  const track   = document.getElementById('rouletteTrack');
+  const trackW  = track.clientWidth;
+  const centerX = trackW / 2;
+  // Add small random offset so it doesn't always stop dead-center
+  const offset  = (Math.random() - 0.5) * (CARD_W * 0.6);
+  const targetTX = -(wIdx * CARD_W + CARD_W / 2 - centerX + offset);
+
+  // Ensure strip is rendered before animating
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    inner.style.transition = `transform ${SPIN_MS}ms cubic-bezier(0.05, 0.9, 0.12, 1)`;
+    inner.style.transform  = `translateX(${targetTX}px)`;
+  }));
+
+  setTimeout(() => {
+    // Highlight winner card
+    const cards = inner.querySelectorAll('.r-card');
+    if (cards[wIdx]) cards[wIdx].classList.add('winner');
+    setTimeout(() => showWinner(winner), 700);
+    spinning = false;
+    setTimeout(buildRoulette, 4000); // reset for next spin
+  }, SPIN_MS + 150);
+}
+
+// ── Winner modal ──────────────────────────────────────────────────────────────
+function showWinner(p) {
+  const chance = ((p.tickets / totalTickets) * 100).toFixed(1);
+  document.getElementById('winnerName').textContent = p.name;
+  document.getElementById('winnerSub').textContent  = p.tickets + ' TICKETS · ' + chance + '% CHANCE';
+
+  const wrap = document.getElementById('modalAvatarWrap');
+  if (p.avatar) {
+    wrap.innerHTML = `<img class="modal-avatar" src="${p.avatar}" alt="${p.name}" />`;
+  } else {
+    wrap.innerHTML = `<div class="modal-avatar-ph" style="background:${p.color}22;border-color:${p.color}">${p.name.slice(0,1)}</div>`;
+  }
+
+  document.getElementById('winnerModal').classList.add('show');
+  launchSparkles();
+}
+
+document.getElementById('modalClose').addEventListener('click', () => {
+  document.getElementById('winnerModal').classList.remove('show');
+});
+
+// ── Sparkles ──────────────────────────────────────────────────────────────────
+function launchSparkles() {
+  const container = document.getElementById('sparkleContainer');
+  const colors = ['#ffd700','#00e5ff','#d500f9','#00e676','#ff1744'];
+  for (let i = 0; i < 80; i++) {
+    const el = document.createElement('div');
+    el.style.cssText = `position:absolute;width:${4+Math.random()*6}px;height:${4+Math.random()*6}px;background:${colors[Math.floor(Math.random()*colors.length)]};left:${Math.random()*100}vw;top:${Math.random()*60+20}vh;border-radius:${Math.random()>.5?'50%':'2px'};opacity:1;pointer-events:none;transition:all ${1.5+Math.random()}s ease-out;box-shadow:0 0 6px currentColor;`;
+    container.appendChild(el);
+    setTimeout(() => { el.style.transform = `translateY(${-100-Math.random()*200}px) rotate(${Math.random()*720}deg)`; el.style.opacity = '0'; }, 50);
+    setTimeout(() => el.remove(), 2500);
+  }
+}
+
+// ── Participants table ────────────────────────────────────────────────────────
+function renderParticipants() {
+  const list = document.getElementById('participantsList');
+  list.innerHTML = PARTICIPANTS.map((p, i) => {
+    const chance  = ((p.tickets / totalTickets) * 100).toFixed(1);
+    const avaHtml = p.avatar
+      ? `<img class="part-ava" src="${p.avatar}" alt="" />`
+      : `<div class="part-ava-ph" style="background:${p.color}22;border:1px solid ${p.color}">${p.name.slice(0,1)}</div>`;
+    return `<div class="part-row">
+      <div class="part-rank">${i + 1}</div>
+      ${avaHtml}
+      <div class="part-info">
+        <div class="part-name">${p.name}</div>
+        <div class="part-tickets">${p.tickets} TICKETS</div>
+      </div>
+      <div class="part-chance">${chance}%</div>
+    </div>`;
+  }).join('');
+  document.getElementById('totalTicketsInfo').textContent = 'TOTAL: ' + totalTickets + ' TICKETS';
+}
+
+// ── Countdown timer + auto-spin ───────────────────────────────────────────────
+let timeLeft = SPIN_SECONDS;
+
+function updateTimer() {
+  const m   = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+  const s   = (timeLeft % 60).toString().padStart(2, '0');
+  const str = m + ':' + s;
+  document.getElementById('timerDisplay').textContent = str;
+  document.getElementById('cardTimer').textContent    = str;
+  if (timeLeft <= 10) document.getElementById('timerDisplay').classList.add('urgent');
+  else                document.getElementById('timerDisplay').classList.remove('urgent');
+  if (timeLeft <= 0) {
+    if (!spinning && !autoSpun) { autoSpun = true; setTimeout(doSpin, 500); }
+    timeLeft = SPIN_SECONDS; autoSpun = false;
+    return;
+  }
+  timeLeft--;
+}
+updateTimer();
+setInterval(updateTimer, 1000);
+
+// Boot: fetch leaderboard
+loadParticipants();
+
+// ── Pixel rocket cursor — exact copy from main.js ─────────────────────────────
+
+
+(function initRocket() {
+  const SZ = 4;
+  const pixels = [
+    [3,0,'#FF2222'],
+    [2,1,'#FF4444'],[3,1,'#FF2222'],[4,1,'#FF4444'],
+    [1,2,'#FF5555'],[2,2,'#FF2222'],[3,2,'#FF2222'],[4,2,'#FF2222'],[5,2,'#FF5555'],
+    [1,3,'#FF4444'],[2,3,'#FF2222'],[3,3,'#FFFFFF'],[4,3,'#FF2222'],[5,3,'#FF4444'],
+    [2,4,'#FF4444'],[3,4,'#FF2222'],[4,4,'#FF4444'],
+    [0,3,'#CC1111'],[6,3,'#CC1111'],
+    [0,4,'#CC1111'],[6,4,'#CC1111'],
+    [2,5,'#FFA500'],[3,5,'#FFDD00'],[4,5,'#FFA500'],
+    [3,6,'#FF6600'],
+  ];
+  const W = 7, H = 7;
+  const rCanvas = document.createElement('canvas');
+  rCanvas.width  = W * SZ;
+  rCanvas.height = H * SZ;
+  rCanvas.style.cssText = 'position:fixed;pointer-events:none;z-index:99999;display:none;image-rendering:pixelated;';
+  document.body.appendChild(rCanvas);
+  const rctx = rCanvas.getContext('2d');
+  pixels.forEach(([c, r, color]) => { rctx.fillStyle = color; rctx.fillRect(c*SZ, r*SZ, SZ, SZ); });
+
+  const trail = [];
+  const TRAIL_LEN = 10;
+  let mx = -200, my = -200, rx = -200, ry = -200;
+  let angle = 0, targetAngle = 0;
+
+  document.addEventListener('mousemove', e => {
+    const dx = e.clientX - rx, dy = e.clientY - ry;
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1)
+      targetAngle = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
+    mx = e.clientX; my = e.clientY;
+    rCanvas.style.display = 'block';
+  });
+  document.addEventListener('mouseleave', () => { rCanvas.style.display = 'none'; });
+
+  const trailContainer = document.createElement('div');
+  trailContainer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:99998;';
+  document.body.appendChild(trailContainer);
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function lerpAngle(a, b, t) { let d = ((b - a + 540) % 360) - 180; return a + d * t; }
+
+  function spawnTrail(x, y) {
+    const p = document.createElement('div');
+    const c = ['#FF2222','#FF6600','#FFA500','#FFDD00'][Math.floor(Math.random()*4)];
+    const sz = SZ * (Math.random() > 0.5 ? 2 : 1);
+    p.style.cssText = `position:fixed;width:${sz}px;height:${sz}px;background:${c};left:${x-sz/2}px;top:${y-sz/2}px;pointer-events:none;image-rendering:pixelated;transition:opacity 0.35s linear,transform 0.35s linear;`;
+    trailContainer.appendChild(p);
+    trail.push(p);
+    requestAnimationFrame(() => { p.style.opacity='0'; p.style.transform=`translate(${(Math.random()-.5)*12}px,${(Math.random()-.5)*12}px)`; });
+    setTimeout(() => { if (p.parentNode) p.parentNode.removeChild(p); }, 400);
+    if (trail.length > TRAIL_LEN*3) { const old = trail.shift(); if (old && old.parentNode) old.parentNode.removeChild(old); }
+  }
+
+  let lastTrail = 0;
+  function animate(ts) {
+    rx = lerp(rx, mx, 0.18);
+    ry = lerp(ry, my, 0.18);
+    angle = lerpAngle(angle, targetAngle, 0.12);
+    const hw = rCanvas.width/2, hh = rCanvas.height/2;
+    rCanvas.style.left      = (rx - hw) + 'px';
+    rCanvas.style.top       = (ry - hh) + 'px';
+    rCanvas.style.transform = `rotate(${angle}deg)`;
+    if (ts - lastTrail > 40) {
+      const rad = (angle - 90) * Math.PI / 180;
+      spawnTrail(rx + Math.cos(rad + Math.PI)*hh*0.9,
+                 ry + Math.sin(rad + Math.PI)*hh*0.9);
+      lastTrail = ts;
+    }
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+})();
+</script>
+</body>
+</html>

@@ -5,6 +5,7 @@
 *.session
 *.session-journal
 sessions/
+.sessions/
 
 # Python
 __pycache__/

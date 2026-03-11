@@ -2,7 +2,10 @@
 SadCat Gamble — Backend API
 FastAPI + Telethon + PostgreSQL
 """
+import hashlib as _hashlib
+import json as _json_std
 import logging
+import time as _time
 from contextlib import asynccontextmanager
 from datetime import datetime
 
@@ -13,7 +16,7 @@ from sqlalchemy import select, delete, text
 
 from app.config import settings
 from app.database import engine, AsyncSessionLocal, Base
-from app.models import LeaderboardEntry, ParseLog, RefLeaderboardEntry, GambleCall
+from app.models import LeaderboardEntry, ParseLog, RefLeaderboardEntry, GambleCall, WheelSpin
 from app.telegram_parser import telegram_parser
 from app.routers import leaderboard, contest
 from app.routers import refleaderboard
@@ -27,6 +30,266 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
+
+# ── Wheel state (in-memory, shared across all clients) ────────────────────────
+WHEEL_SPIN_SECONDS = 5 * 60
+
+_SEG_COLORS = [
+    '#0066ff','#00ccff','#9900ff','#ff6600','#00cc44',
+    '#ff0066','#ffcc00','#00ffcc','#ff3300','#6600ff',
+    '#00ff66','#ff9900','#3366ff','#ff0099','#33ff00',
+    '#ff3366','#00ff99','#cc00ff','#ff9966','#0099ff',
+]
+
+_wheel_state: dict = {
+    "winner_username": None,
+    "winner_name":     None,
+    "winner_avatar":   None,   # base64 string or null
+    "winner_color":    None,
+    "winner_tickets":  None,
+    "winner_chance":   None,
+    "winner_ticket":   None,
+    "total_tickets":   None,
+    "randorg_url":     None,
+    "randorg_serial":  None,   # signed API serial number
+    "randorg_sig":     None,   # first 16 chars of signature
+    "randorg_signed":  None,   # full {random, signature} object for verification
+    "next_spins_at":   int((_time.time() + WHEEL_SPIN_SECONDS) * 1000),  # unix ms
+}
+
+
+async def _get_random_org_ticket(total: int) -> tuple:
+    """Get a random integer 1..total from random.org Signed API.
+    Returns (ticket, serial, signature, random_obj).
+    Raises RuntimeError if API key is not configured or request fails.
+    No fallback to local random — a failed draw is better than an unverifiable one.
+    """
+    api_key = settings.random_org_api_key
+    if not api_key:
+        raise RuntimeError("RANDOM_ORG_API_KEY is not configured")
+
+    payload = {
+        "jsonrpc": "2.0",
+        "method": "generateSignedIntegers",
+        "params": {
+            "apiKey": api_key,
+            "n": 1,
+            "min": 1,
+            "max": total,
+            "replacement": True,
+        },
+        "id": 1,
+    }
+    import httpx as _httpx
+    async with _httpx.AsyncClient(timeout=10) as _http:
+        resp = await _http.post(
+            "https://api.random.org/json-rpc/4/invoke",
+            json=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    if "error" in data:
+        raise RuntimeError(f"random.org error: {data['error']}")
+
+    result = data["result"]
+    ticket    = result["random"]["data"][0]
+    serial    = result["random"]["serialNumber"]
+    signature = result["signature"]
+    random_obj = result["random"]
+    logger.info("random.org SIGNED ticket: %d / %d (serial=%s)", ticket, total, serial)
+    return ticket, serial, signature, random_obj
+
+
+# Advisory lock key — any stable 64-bit int unique to this app
+_WHEEL_ADVISORY_KEY = 7339475247
+
+
+def _participants_hash(participants: list) -> str:
+    """sha256 of canonical sorted JSON of participants (name + tickets only)."""
+    canonical = _json_std.dumps(
+        [{"name": p["name"], "tickets": p["tickets"]} for p in participants],
+        sort_keys=True, separators=(",", ":")
+    )
+    return _hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def _wheel_state_from_spin(spin: WheelSpin, next_at_ms: int = 0) -> dict:
+    """Convert a WheelSpin ORM row to the _wheel_state dict format.
+    next_at_ms — override for next_spins_at (unix ms). If 0, compute from spin.created_at.
+    """
+    if next_at_ms <= 0:
+        next_at_ms = int((spin.created_at.timestamp() + WHEEL_SPIN_SECONDS) * 1000)
+    return {
+        "winner_username": spin.winner_username,
+        "winner_name":     spin.winner_name,
+        "winner_avatar":   spin.winner_avatar,
+        "winner_color":    spin.winner_color,
+        "winner_tickets":  spin.winner_tickets,
+        "winner_chance":   spin.winner_chance,
+        "winner_ticket":   spin.winning_ticket,
+        "total_tickets":   spin.total_tickets,
+        "randorg_url":     "/verify",
+        "randorg_serial":  spin.rand_serial,
+        "randorg_sig":     spin.rand_signature[:16] if spin.rand_signature else None,
+        "randorg_signed":  {"random": spin.rand_random, "signature": spin.rand_signature}
+                           if spin.rand_random else None,
+        "wheel_version_hash": spin.wheel_version_hash,
+        "spin_id":         spin.id,
+        "verify_link":     f"/api/wheel/verify/{spin.id}",
+        "winner_range_start": spin.winner_range_start,
+        "winner_range_end":   spin.winner_range_end,
+        "spin_at":         int(spin.created_at.timestamp() * 1000) if spin.created_at else None,
+        "next_spins_at":   next_at_ms,
+    }
+
+
+async def _load_wheel_state_from_db():
+    """Load last successful spin from DB into _wheel_state."""
+    global _wheel_state
+    try:
+        async with AsyncSessionLocal() as db:
+            spin = (await db.execute(
+                select(WheelSpin)
+                .where(WheelSpin.status == "ok")
+                .order_by(WheelSpin.id.desc())
+                .limit(1)
+            )).scalars().first()
+        if spin:
+            _wheel_state = _wheel_state_from_spin(
+                spin,
+                next_at_ms=int((_time.time() + WHEEL_SPIN_SECONDS) * 1000),
+            )
+            logger.info("Loaded last wheel spin #%d from DB (winner=%s)", spin.id, spin.winner_name)
+        else:
+            logger.info("No previous wheel spin in DB, will wait for first scheduler tick")
+    except Exception as exc:
+        logger.warning("Could not load wheel state from DB: %s", exc)
+
+
+async def do_wheel_spin():
+    """Pick a weighted-random winner from the leaderboard and persist to DB.
+
+    Uses pg_try_advisory_xact_lock to prevent concurrent spins when running
+    multiple workers or containers.
+    No fallback to local random — if random.org is unavailable the spin is
+    recorded as status='failed' and retried on the next scheduler tick.
+    """
+    global _wheel_state
+    async with AsyncSessionLocal() as db:
+        # ── 1. Advisory lock ─────────────────────────────────────────────────
+        locked = (await db.execute(
+            text("SELECT pg_try_advisory_xact_lock(:k)").bindparams(k=_WHEEL_ADVISORY_KEY)
+        )).scalar()
+        if not locked:
+            logger.warning("Wheel spin skipped: another instance holds the lock")
+            return
+
+        try:
+            # ── 2. Load leaderboard ──────────────────────────────────────────
+            rows = (await db.execute(
+                select(LeaderboardEntry)
+                .order_by(LeaderboardEntry.rank)
+                .limit(20)
+            )).scalars().all()
+
+            if not rows:
+                logger.warning("Wheel spin skipped: leaderboard is empty")
+                _wheel_state["next_spins_at"] = int((_time.time() + WHEEL_SPIN_SECONDS) * 1000)
+                return
+
+            # ── 3. Build participants + hash ─────────────────────────────────
+            max_score = rows[0].score or 1
+            participants = []
+            for i, e in enumerate(rows):
+                tickets = max(1, round((e.score / max_score) * 100))
+                participants.append({
+                    "username": e.username,
+                    "name":     e.display_name or e.username or f"Player {i+1}",
+                    "tickets":  tickets,
+                    "avatar":   e.avatar_b64,
+                    "color":    _SEG_COLORS[i % len(_SEG_COLORS)],
+                })
+
+            wheel_hash = _participants_hash(participants)
+
+            cumulative = 0
+            ticket_ranges = []
+            for p in participants:
+                start = cumulative + 1
+                end   = cumulative + p["tickets"]
+                ticket_ranges.append((start, end, p))
+                cumulative = end
+            total = cumulative
+
+            # ── 4. Draw from random.org (may raise) ──────────────────────────
+            winning_ticket, rand_serial, rand_signature, rand_random = \
+                await _get_random_org_ticket(total)
+            winning_ticket = max(1, min(winning_ticket, total))
+
+            # ── 5. Find winner ───────────────────────────────────────────────
+            winner = participants[-1]
+            winner_range_start, winner_range_end = 1, total
+            for start, end, p in ticket_ranges:
+                if start <= winning_ticket <= end:
+                    winner = p
+                    winner_range_start, winner_range_end = start, end
+                    break
+
+            chance = round(winner["tickets"] / total * 100, 1)
+            now_utc = datetime.utcnow()
+
+            # ── 6. Persist result ────────────────────────────────────────────
+            spin = WheelSpin(
+                created_at=now_utc,
+                status="ok",
+                wheel_version_hash=wheel_hash,
+                total_tickets=total,
+                participants_json=[{"name": p["name"], "username": p["username"],
+                                    "tickets": p["tickets"], "color": p["color"]}
+                                   for p in participants],
+                winning_ticket=winning_ticket,
+                winner_username=winner["username"],
+                winner_name=winner["name"],
+                winner_avatar=winner["avatar"],
+                winner_color=winner["color"],
+                winner_tickets=winner["tickets"],
+                winner_chance=chance,
+                winner_range_start=winner_range_start,
+                winner_range_end=winner_range_end,
+                rand_serial=rand_serial,
+                rand_signature=rand_signature,
+                rand_random=rand_random,
+                verify_url="/verify",
+            )
+            db.add(spin)
+            await db.commit()
+            await db.refresh(spin)
+            # lock released automatically on commit
+
+            _wheel_state = _wheel_state_from_spin(spin)
+            logger.info(
+                "Wheel spin #%d: winner=%s ticket#%d/%d (%.1f%%) serial=%s hash=%s",
+                spin.id, winner["name"], winning_ticket, total, chance,
+                rand_serial, wheel_hash[:8],
+            )
+
+        except Exception as exc:
+            await db.rollback()
+            logger.exception("Wheel spin failed: %s", exc)
+            # Record failed spin for audit
+            try:
+                async with AsyncSessionLocal() as err_db:
+                    err_db.add(WheelSpin(
+                        created_at=datetime.utcnow(),
+                        status="failed",
+                        error_msg=str(exc),
+                    ))
+                    await err_db.commit()
+            except Exception:
+                pass
+            _wheel_state["next_spins_at"] = int((_time.time() + WHEEL_SPIN_SECONDS) * 1000)
 
 
 async def update_ref_leaderboard():
@@ -375,10 +638,31 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.error("Could not start Telegram client: %s", exc)
 
+    # Pre-populate avatar cache from DB so restart doesn't re-download 100 avatars
+    try:
+        async with AsyncSessionLocal() as _db:
+            _rows = (await _db.execute(
+                select(LeaderboardEntry.username, LeaderboardEntry.avatar_b64)
+                .where(LeaderboardEntry.avatar_b64.isnot(None))
+            )).all()
+            _ref_rows = (await _db.execute(
+                select(RefLeaderboardEntry.username, RefLeaderboardEntry.avatar_b64)
+                .where(RefLeaderboardEntry.avatar_b64.isnot(None))
+            )).all()
+        avatar_map = {row[0]: row[1] for row in list(_rows) + list(_ref_rows)}
+        telegram_parser.preload_avatar_cache(avatar_map)
+    except Exception as exc:
+        logger.warning("Could not preload avatar cache from DB: %s", exc)
+
     # Initial fetch
     await update_leaderboard()
     await update_ref_leaderboard()
     await update_gamble_calls()
+
+    # Restore last wheel state from DB; spin immediately only if no history
+    await _load_wheel_state_from_db()
+    if _wheel_state.get("winner_name") is None:
+        await do_wheel_spin()
 
     # Schedule periodic updates (staggered by 30s to avoid concurrent bot handlers)
     from datetime import datetime, timedelta
@@ -405,6 +689,23 @@ async def lifespan(app: FastAPI):
         seconds=300,
         start_date=now + timedelta(seconds=60),
         id="gamble_calls_update",
+        replace_existing=True,
+    )
+    # Compute next spin time: ensure it's always in the future
+    raw_next = _wheel_state.get("next_spins_at", 0) / 1000
+    if raw_next <= now.timestamp() + 5:
+        # Already passed or within 5s — schedule from now
+        next_spin_dt = now + timedelta(seconds=WHEEL_SPIN_SECONDS)
+    else:
+        next_spin_dt = datetime.fromtimestamp(raw_next)
+
+    scheduler.add_job(
+        do_wheel_spin,
+        "interval",
+        seconds=WHEEL_SPIN_SECONDS,
+        start_date=next_spin_dt,
+        misfire_grace_time=90,   # allow up to 90s late (event loop jitter)
+        id="wheel_spin",
         replace_existing=True,
     )
     scheduler.start()
@@ -445,8 +746,117 @@ async def health():
     return {"status": "ok", "service": "sadcat-api"}
 
 
+@app.get("/api/wheel/state")
+async def wheel_state_endpoint():
+    """Return last successful wheel spin from DB (+ in-memory cache)."""
+    # Always serve from in-memory cache (populated on spin / startup)
+    # If cache is empty (edge case), try DB directly
+    if _wheel_state.get("winner_name") is None:
+        await _load_wheel_state_from_db()
+    return _wheel_state
+
+
+@app.get("/api/wheel/history")
+async def wheel_history_endpoint(limit: int = 20):
+    """Return last N wheel spins from DB for audit/history."""
+    async with AsyncSessionLocal() as db:
+        spins = (await db.execute(
+            select(WheelSpin)
+            .where(WheelSpin.status == "ok")
+            .order_by(WheelSpin.id.desc())
+            .limit(min(limit, 100))
+        )).scalars().all()
+    return [
+        {
+            "id":                 s.id,
+            "created_at":         s.created_at.isoformat() if s.created_at else None,
+            "winner_name":        s.winner_name,
+            "winner_username":    s.winner_username,
+            "winner_avatar":      s.winner_avatar,
+            "winner_color":       s.winner_color,
+            "winning_ticket":     s.winning_ticket,
+            "total_tickets":      s.total_tickets,
+            "winner_range_start": s.winner_range_start,
+            "winner_range_end":   s.winner_range_end,
+            "winner_chance":      s.winner_chance,
+            "rand_serial":        s.rand_serial,
+            "wheel_version_hash": s.wheel_version_hash,
+            "verify_url":         f"/api/wheel/verify/{s.id}",
+        }
+        for s in spins
+    ]
+
+
 @app.post("/api/leaderboard/refresh")
 async def manual_refresh():
     """Manually trigger a leaderboard refresh."""
     await update_leaderboard()
     return {"status": "refreshed"}
+
+
+@app.post("/api/wheel/spin")
+async def manual_wheel_spin():
+    """Manually trigger a wheel spin (dev/admin use)."""
+    await do_wheel_spin()
+    return _wheel_state
+
+
+@app.get("/api/wheel/verify/{spin_id}")
+async def verify_spin_redirect(spin_id: int):
+    """Redirect to random.org signature verification form for a given spin."""
+    import base64 as _b64
+    from urllib.parse import quote as _quote
+    from fastapi.responses import RedirectResponse as _Redir
+
+    async with AsyncSessionLocal() as db:
+        spin = (await db.execute(
+            select(WheelSpin).where(WheelSpin.id == spin_id)
+        )).scalars().first()
+    if not spin or spin.status != "ok" or not spin.rand_random:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Spin not found or no signed data")
+
+    rand_json = _json_std.dumps(spin.rand_random, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    rand_b64  = _b64.b64encode(rand_json).decode("ascii")
+    url = (
+        "https://api.random.org/signatures/form?format=json"
+        + "&random=" + _quote(rand_b64)
+        + "&signature=" + _quote(spin.rand_signature)
+    )
+    return _Redir(url, status_code=302)
+
+
+@app.get("/api/wheel/spin/{spin_id}")
+async def get_spin_by_id(spin_id: int):
+    """Return a single spin by ID — used by /verify?spin=N."""
+    async with AsyncSessionLocal() as db:
+        spin = (await db.execute(
+            select(WheelSpin).where(WheelSpin.id == spin_id)
+        )).scalars().first()
+    if spin is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Spin not found")
+    return {
+        "id":                 spin.id,
+        "created_at":         spin.created_at.isoformat() if spin.created_at else None,
+        "status":             spin.status,
+        "winner_name":        spin.winner_name,
+        "winner_username":    spin.winner_username,
+        "winner_avatar":      spin.winner_avatar,
+        "winner_color":       spin.winner_color,
+        "winner_tickets":     spin.winner_tickets,
+        "winner_chance":      spin.winner_chance,
+        "winning_ticket":     spin.winning_ticket,
+        "winner_ticket":      spin.winning_ticket,
+        "total_tickets":      spin.total_tickets,
+        "winner_range_start": spin.winner_range_start,
+        "winner_range_end":   spin.winner_range_end,
+        "wheel_version_hash": spin.wheel_version_hash,
+        "participants":       spin.participants_json,
+        "rand_serial":        spin.rand_serial,
+        "randorg_serial":     spin.rand_serial,
+        "randorg_signed":     {"random": spin.rand_random, "signature": spin.rand_signature}
+                              if spin.rand_random else None,
+        "verify_link":        f"/api/wheel/verify/{spin.id}",
+        "spin_id":            spin.id,
+    }

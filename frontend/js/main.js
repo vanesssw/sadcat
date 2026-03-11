@@ -406,6 +406,7 @@ async function loadContest() {
     if (!items || items.length === 0) return; // keep placeholder
 
     const grid = document.getElementById('contestGrid');
+    if (!grid) return;
     grid.innerHTML = '';
 
     items.forEach(c => {
@@ -503,7 +504,7 @@ async function loadGambleCalls() {
   const oldEl = document.getElementById('gambleOldCalls');
   const liveGroup = document.getElementById('gambleLiveGroup');
   const oldGroup = document.getElementById('gambleOldGroup');
-
+  if (!liveEl || !oldEl) return;
   try {
     const res = await fetch(`${API_BASE}/gamble`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -555,6 +556,64 @@ window.refreshLeaderboard = async function () {
   }
 };
 
+// ---- Raffle Winners ----
+function _renderWinnerCards(winners) {
+  const list = document.getElementById('raffleWinnersList');
+  if (!list || !winners.length) return;
+  list.innerHTML = winners.map(w => {
+    const date    = new Date(w.date || w.created_at || Date.now());
+    const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  + ' ' + date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const avaHtml = (w.avatar || w.winner_avatar)
+      ? `<img class="rw-avatar" src="${w.avatar || ('data:image/jpeg;base64,' + w.winner_avatar)}" alt="" />`
+      : `<div class="rw-avatar-ph" style="background:${w.color||w.winner_color||'#1e3a8a'}22;border-color:${w.color||w.winner_color||'#4d9fff'}">${(w.name||w.winner_name||'?').slice(0,1)}</div>`;
+    const ticket = w.ticket || w.winning_ticket;
+    const total  = w.total  || w.total_tickets;
+    const rangeStart = w.rangeStart || w.winner_range_start;
+    const rangeEnd   = w.rangeEnd   || w.winner_range_end;
+    const spinId     = w.spinId     || w.id;
+    const rangeStr   = (rangeStart && rangeEnd) ? ` (${rangeStart}\u2013${rangeEnd})` : '';
+    const ticketHtml = ticket && total
+      ? `<div class="rw-ticket">TICKET #${ticket}/${total}${rangeStr}</div>`
+      : '';
+    const proof = w.proof || w.verify_url || (spinId ? `/api/wheel/verify/${spinId}` : null);
+    const proofHtml = proof
+      ? `<a class="rw-proof" href="${proof}" target="_blank" rel="noopener">VERIFY → RANDOM.ORG</a>`
+      : '';
+    return `<div class="rw-card">
+      ${avaHtml}
+      <div class="rw-info">
+        <div class="rw-name">${w.name || w.winner_name}</div>
+        <div class="rw-date">${dateStr}</div>
+        ${ticketHtml}${proofHtml}
+      </div>
+      <div class="rw-prize">${w.prize || '10 SOL'}</div>
+    </div>`;
+  }).join('');
+}
+
+async function renderRaffleWinners() {
+  const list = document.getElementById('raffleWinnersList');
+  if (!list) return;
+
+  // Try API first (authoritative, survives browser/localStorage resets)
+  try {
+    const res = await fetch('/api/wheel/history?limit=3');
+    if (res.ok) {
+      const rows = await res.json();
+      if (rows && rows.length) {
+        _renderWinnerCards(rows);
+        return;
+      }
+    }
+  } catch(e) { /* fallthrough to localStorage */ }
+
+  // Fallback: localStorage (populated by wheel.js after spin animation)
+  let winners = [];
+  try { winners = JSON.parse(localStorage.getItem('sadcat_raffle_winners') || '[]'); } catch(e) {}
+  _renderWinnerCards(winners);
+}
+
 // ---- Smooth scroll for nav links ----
 document.querySelectorAll('.nav-link[href^="#"]').forEach(link => {
   link.addEventListener('click', e => {
@@ -568,7 +627,13 @@ document.querySelectorAll('.nav-link[href^="#"]').forEach(link => {
 
 // ---- Init ----
 (async function init() {
-  await Promise.all([loadLeaderboard(), loadRefLeaderboard(), loadContest(), loadGambleCalls()]);
+  await Promise.all([
+    renderRaffleWinners(),
+    loadLeaderboard(),
+    loadRefLeaderboard(),
+    loadContest(),
+    loadGambleCalls(),
+  ]);
 
   // Auto-refresh every minute
   setInterval(loadLeaderboard, REFRESH_INTERVAL);
