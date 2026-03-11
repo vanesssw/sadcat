@@ -174,6 +174,7 @@
 
   let currentToken = null;
   let currentState = null;
+  let widgetRendered = false;
 
   const urlParams = new URLSearchParams(window.location.search);
   currentState = urlParams.get("state");
@@ -200,13 +201,22 @@
     console.log("SmartCaptcha initialized!");
     st("SOLVE THE CAPTCHA", "#00ff88", "status-success");
 
+    const api = window.smartcaptcha || window.smartCaptcha;
+    if (!api || typeof api.render !== "function") {
+      console.error("SmartCaptcha API not available", { smartcaptcha: window.smartcaptcha, smartCaptcha: window.smartCaptcha });
+      st("ERROR LOADING CAPTCHA", "#ff4466", "status-error");
+      showError("SmartCaptcha API not available");
+      showFallbackCaptcha();
+      return;
+    }
+
     const container = document.createElement("div");
     container.id = "smart-captcha";
     captchaWrapper.appendChild(container);
     console.log("Container created:", container);
 
     try {
-      window.smartCaptcha = window.smartcaptcha.render(container, {
+      api.render(container, {
         sitekey: YANDEX_SITE_KEY,
         callback: function (token) {
           console.log("Captcha solved, token:", token);
@@ -216,6 +226,7 @@
         },
       });
       console.log("SmartCaptcha rendered");
+      widgetRendered = true;
     } catch (error) {
       console.error("Error rendering captcha:", error);
       st("ERROR RENDERING CAPTCHA", "#ff4466", "status-error");
@@ -275,7 +286,7 @@
 
   function loadSmartCaptchaScript() {
     return new Promise((resolve, reject) => {
-      if (window.smartcaptcha) {
+      if (window.smartcaptcha || window.smartCaptcha) {
         dbg("smartcaptcha_already_present", true);
         resolve();
         return;
@@ -316,6 +327,7 @@
         dbg("smartcaptcha_script_loaded", {
           elapsedMs: Math.round(elapsed),
           smartcaptchaPresent: !!window.smartcaptcha,
+          smartCaptchaPresent: !!window.smartCaptcha,
         });
         resolve();
       };
@@ -398,8 +410,9 @@
         smartcaptchaPresent: !!window.smartcaptcha,
         smartCaptchaPresent: !!window.smartCaptcha,
       });
-      if (!window.smartCaptcha) {
-        dbg("smartcaptcha_init_manual_call", true);
+      const api = window.smartcaptcha || window.smartCaptcha;
+      if (api && !widgetRendered) {
+        dbg("smartcaptcha_init_manual_call", { reason: "api_present_widget_not_rendered" });
         window.onSmartCaptchaInit();
       }
     })
