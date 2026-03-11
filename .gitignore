@@ -1,6 +1,10 @@
 # Environment
 .env
 
+.idea
+.venv
+__pycache__
+
 # Telethon session files
 *.session
 *.session-journal

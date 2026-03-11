@@ -24,13 +24,15 @@ services:
     env_file: .env
     environment:
       POSTGRES_HOST: db
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
     volumes:
       - ./.sessions:/app/sessions
+      - ./frontend:/app/frontend:ro
+    ports:
+      - "8001:8000"
     depends_on:
       db:
         condition: service_healthy
-    expose:
-      - "8000"
 
   nginx:
     build:
@@ -39,6 +41,17 @@ services:
     restart: unless-stopped
     ports:
       - "8000:80"
+    depends_on:
+      - backend
+      - bot
+
+  bot:
+    build:
+      context: ./bot
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      BACKEND_URL: http://backend:8000
     depends_on:
       - backend
 

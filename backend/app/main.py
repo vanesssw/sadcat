@@ -16,11 +16,12 @@ from sqlalchemy import select, delete, text
 
 from app.config import settings
 from app.database import engine, AsyncSessionLocal, Base
-from app.models import LeaderboardEntry, ParseLog, RefLeaderboardEntry, GambleCall, WheelSpin
+from app.models import LeaderboardEntry, ParseLog, RefLeaderboardEntry, GambleCall, WheelSpin, VerificationState
 from app.telegram_parser import telegram_parser
 from app.routers import leaderboard, contest
 from app.routers import refleaderboard
 from app.routers import gamble as gamble_router
+from app.routers import verification
 from app.gamble_parser import scan_channel_calls, fetch_dexscreener, is_live as call_is_live, fetch_ohlcv_ath_atl
 
 logging.basicConfig(
@@ -739,11 +740,31 @@ app.include_router(leaderboard.router)
 app.include_router(contest.router)
 app.include_router(refleaderboard.router)
 app.include_router(gamble_router.router)
+app.include_router(verification.router)
 
 
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "service": "sadcat-api"}
+
+
+@app.get("/captcha")
+async def captcha_page():
+    """Отдает captcha.html с подставленным ключом"""
+    from fastapi.responses import HTMLResponse
+    
+    # Читаем HTML файл из смонтированного volume
+    html_path = "/app/frontend/captcha.html"
+    with open(html_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+    
+    # Подставляем ключ прямо в HTML
+    html_content = html_content.replace(
+        "sitekey: 'YANDEX_CLIENT_KEY_HERE',",
+        f"sitekey: '{settings.yandex_smartcaptcha_client_key}',"
+    )
+    
+    return HTMLResponse(content=html_content)
 
 
 @app.get("/api/wheel/state")
