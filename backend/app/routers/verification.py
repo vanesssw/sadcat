@@ -4,7 +4,7 @@ import secrets
 import hashlib
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -84,8 +84,17 @@ async def generate_verification_state(request: GenerateStateRequest):
 
 
 @router.post("/check", response_model=VerifyResponse)
-async def verify_captcha(request: VerifyRequest):
+async def verify_captcha(request: VerifyRequest, http_request: Request):
     """Проверяет SmartCaptcha токен и отмечает state как верифицированный"""
+
+    # Prefer client IP from proxy headers (nginx) for SmartCaptcha validation
+    xff = http_request.headers.get("x-forwarded-for")
+    if xff:
+        client_ip = xff.split(",")[0].strip()
+    else:
+        client_ip = http_request.headers.get("x-real-ip") or (
+            http_request.client.host if http_request.client else ""
+        )
     
     async with AsyncSessionLocal() as session:
         # Ищем state в БД
@@ -116,7 +125,7 @@ async def verify_captcha(request: VerifyRequest):
             )
         
         # Проверяем SmartCaptcha токен
-        if not await verify_smart_captcha_token(request.smart_token):
+        if not await verify_smart_captcha_token(request.smart_token, client_ip=client_ip):
             return VerifyResponse(
                 success=False,
                 message="Captcha verification failed"
@@ -144,7 +153,7 @@ async def verify_captcha(request: VerifyRequest):
         )
 
 
-async def verify_smart_captcha_token(token: str) -> bool:
+async def verify_smart_captcha_token(token: str, client_ip: str = "") -> bool:
     """Проверяет токен Yandex SmartCaptcha"""
     if not settings.yandex_smartcaptcha_server_key:
         logger.error("Yandex SmartCaptcha server key not configured")
@@ -152,13 +161,14 @@ async def verify_smart_captcha_token(token: str) -> bool:
     
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.post(
+            response = await client.get(
                 "https://smartcaptcha.yandexcloud.net/validate",
-                data={
+                params={
                     "secret": settings.yandex_smartcaptcha_server_key,
                     "token": token,
-                    "ip": "",  # Можно добавить IP если нужно
-                }
+                    "ip": client_ip,
+                },
+                timeout=1.0,
             )
             
             if response.status_code == 200:
