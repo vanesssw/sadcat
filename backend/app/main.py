@@ -633,11 +633,14 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
 
     # Connect Telegram client
-    try:
-        await telegram_parser.start()
-        logger.info("Telegram client ready")
-    except Exception as exc:
-        logger.error("Could not start Telegram client: %s", exc)
+    if settings.enable_telegram:
+        try:
+            await telegram_parser.start()
+            logger.info("Telegram client ready")
+        except Exception as exc:
+            logger.error("Could not start Telegram client: %s", exc)
+    else:
+        logger.info("Telegram client disabled")
 
     # Pre-populate avatar cache from DB so restart doesn't re-download 100 avatars
     try:
@@ -760,8 +763,8 @@ async def captcha_page():
     
     # Подставляем ключ прямо в HTML
     html_content = html_content.replace(
-        "sitekey: 'YANDEX_CLIENT_KEY_HERE',",
-        f"sitekey: '{settings.yandex_smartcaptcha_client_key}',"
+        '<meta name="yandex-client-key" content="YANDEX_CLIENT_KEY_HERE" />',
+        f'<meta name="yandex-client-key" content="{settings.yandex_smartcaptcha_client_key}" />',
     )
     
     return HTMLResponse(content=html_content)
