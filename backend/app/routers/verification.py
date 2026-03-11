@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import secrets
 import hashlib
@@ -71,7 +71,7 @@ async def generate_verification_state(request: GenerateStateRequest):
             state=state,
             user_id=request.user_id,
             username=request.username,
-            expires_at=datetime.utcnow() + timedelta(hours=1)  # Истекает через час
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1)  # Истекает через час
         )
         
         session.add(verification_state)
@@ -111,7 +111,7 @@ async def verify_captcha(request: VerifyRequest, http_request: Request):
             )
         
         # Проверяем, не истек ли срок действия
-        if verification_state.expires_at < datetime.utcnow():
+        if verification_state.expires_at < datetime.now(timezone.utc):
             return VerifyResponse(
                 success=False,
                 message="Verification state expired"
@@ -133,7 +133,7 @@ async def verify_captcha(request: VerifyRequest, http_request: Request):
         
         # Отмечаем как верифицированный
         verification_state.is_verified = True
-        verification_state.verified_at = datetime.utcnow()
+        verification_state.verified_at = datetime.now(timezone.utc)
         await session.commit()
         
         # Начисляем поинты пользователю
@@ -230,7 +230,7 @@ async def award_points_to_user(user_id: int, username: str, session: AsyncSessio
         if user_entry:
             # Обновляем существующего пользователя
             user_entry.score += 10
-            user_entry.updated_at = datetime.utcnow()
+            user_entry.updated_at = datetime.now(timezone.utc)
             logger.info(f"Added 10 points to existing user {username}")
         else:
             # Создаем новую запись для пользователя
@@ -239,7 +239,7 @@ async def award_points_to_user(user_id: int, username: str, session: AsyncSessio
                 username=username,
                 display_name=username,
                 score=10,
-                updated_at=datetime.utcnow()
+                updated_at=datetime.now(timezone.utc)
             )
             session.add(new_entry)
             logger.info(f"Created new leaderboard entry for user {username} with 10 points")
