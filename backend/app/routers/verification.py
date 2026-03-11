@@ -160,6 +160,7 @@ async def verify_smart_captcha_token(token: str, client_ip: str = "") -> bool:
         return False
     
     try:
+        logger.info("SmartCaptcha validate: client_ip=%s", client_ip)
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 "https://smartcaptcha.yandexcloud.net/validate",
@@ -173,9 +174,17 @@ async def verify_smart_captcha_token(token: str, client_ip: str = "") -> bool:
             
             if response.status_code == 200:
                 result = response.json()
-                return result.get("status") == "ok"
+                status_value = result.get("status")
+                if status_value != "ok":
+                    logger.warning("SmartCaptcha validation failed: status=%s response=%s", status_value, result)
+                return status_value == "ok"
             else:
-                logger.error(f"SmartCaptcha API error: {response.status_code}")
+                body_preview = response.text[:500] if response.text else ""
+                logger.error(
+                    "SmartCaptcha API error: status=%s body=%s",
+                    response.status_code,
+                    body_preview,
+                )
                 return False
                 
     except Exception as e:
