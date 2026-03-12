@@ -294,11 +294,11 @@ async def do_wheel_spin():
 
 
 async def update_ref_leaderboard():
-    """Fetch ref leaderboard from Telegram bot and save to DB."""
+    """Fetch clans leaderboard from Stream Bot HTTP API and save to DB."""
     logger.info("Starting ref leaderboard update...")
     async with AsyncSessionLocal() as db:
         try:
-            entries = await telegram_parser.fetch_ref_leaderboard()
+            entries = await _fetch_ref_leaderboard_http()
 
             if entries:
                 from sqlalchemy import delete as sa_delete
@@ -571,12 +571,57 @@ async def update_gamble_calls():
             logger.exception("Gamble calls update failed: %s", exc)
 
 
+async def _fetch_leaderboard_http(limit: int = 100) -> list:
+    """Fetch players leaderboard from Stream Bot HTTP API."""
+    import httpx as _httpx
+    url = f"{settings.stream_bot_url}/api/leaderboard/players"
+    headers = {"Authorization": f"Bearer {settings.stream_bot_token}"}
+    async with _httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(url, params={"limit": limit}, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+    result = []
+    for item in data.get("leaderboard", []):
+        display = item.get("first_name") or item.get("username", "")
+        if item.get("last_name"):
+            display = f"{display} {item['last_name']}".strip()
+        result.append({
+            "rank": item["rank"],
+            "username": item.get("username", ""),
+            "display_name": display,
+            "score": item.get("points", 0),
+            "avatar_b64": None,
+        })
+    return result
+
+
+async def _fetch_ref_leaderboard_http(limit: int = 100) -> list:
+    """Fetch clans leaderboard from Stream Bot HTTP API."""
+    import httpx as _httpx
+    url = f"{settings.stream_bot_url}/api/leaderboard/clans"
+    headers = {"Authorization": f"Bearer {settings.stream_bot_token}"}
+    async with _httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(url, params={"limit": limit}, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+    result = []
+    for item in data.get("leaderboard", []):
+        result.append({
+            "rank": item["rank"],
+            "username": item.get("owner_username", item.get("slug", "")),
+            "display_name": item.get("name", ""),
+            "refs": item.get("clan_points", 0),
+            "avatar_b64": None,
+        })
+    return result
+
+
 async def update_leaderboard():
-    """Fetch leaderboard from Telegram bot and save to DB."""
+    """Fetch leaderboard from Stream Bot HTTP API and save to DB."""
     logger.info("Starting leaderboard update...")
     async with AsyncSessionLocal() as db:
         try:
-            entries = await telegram_parser.fetch_leaderboard()
+            entries = await _fetch_leaderboard_http()
 
             if entries:
                 # Clear old data and insert fresh

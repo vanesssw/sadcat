@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     yandex_smartcaptcha_client_key: str = ""
     yandex_smartcaptcha_server_key: str = ""
 
+    # Stream Bot HTTP API
+    stream_bot_url: str = "http://2.56.97.211:18474"
+    stream_bot_token: str = ""
+
     # Domain
     domain: str = "localhost"
 

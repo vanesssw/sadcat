@@ -105,10 +105,8 @@ async def verify_captcha(request: VerifyRequest, http_request: Request):
         verification_state = result.scalar_one_or_none()
         
         if not verification_state:
-            return VerifyResponse(
-                success=False,
-                message="Invalid verification state"
-            )
+            # State not in local DB — try Stream Bot captcha system
+            return await _verify_via_stream_bot(request.state, request.smart_token, client_ip)
         
         # Проверяем, не истек ли срок действия
         if verification_state.expires_at < datetime.now(timezone.utc):
@@ -151,6 +149,57 @@ async def verify_captcha(request: VerifyRequest, http_request: Request):
             success=True,
             message="Verification successful"
         )
+
+
+async def _verify_via_stream_bot(state: str, smart_token: str, client_ip: str) -> VerifyResponse:
+    """Verify captcha for states created by the Stream Bot (not in local DB)."""
+    if not settings.stream_bot_token:
+        return VerifyResponse(success=False, message="Invalid verification state")
+
+    headers = {"Authorization": f"Bearer {settings.stream_bot_token}"}
+    base_url = settings.stream_bot_url
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            # 1. Check that state exists in stream bot
+            status_resp = await client.get(
+                f"{base_url}/api/captcha/status/{state}",
+                headers=headers,
+            )
+            if status_resp.status_code != 200:
+                return VerifyResponse(success=False, message="Invalid verification state")
+            status_data = status_resp.json()
+            if status_data.get("captcha_passed"):
+                return VerifyResponse(success=False, message="Already verified")
+
+            # 2. Verify Yandex SmartCaptcha token
+            captcha_ok = await verify_smart_captcha_token(smart_token, client_ip=client_ip)
+
+            # 3. Send callback to stream bot
+            callback_resp = await client.post(
+                f"{base_url}/api/captcha/callback",
+                headers=headers,
+                json={
+                    "state": state,
+                    "payload": {
+                        "captcha_passed": captcha_ok,
+                        "captcha_type": "smartcaptcha",
+                        "fingerprint": {"metadata": {"source": "sadcat-backend"}},
+                        "metadata": {"source": "sadcat-backend"},
+                    },
+                },
+            )
+            if callback_resp.status_code not in (200, 201):
+                logger.error("Stream bot callback failed: %s %s", callback_resp.status_code, callback_resp.text[:200])
+
+    except Exception as exc:
+        logger.error("Stream bot verify error: %s", exc)
+        return VerifyResponse(success=False, message="Connection error to server")
+
+    if not captcha_ok:
+        return VerifyResponse(success=False, message="Captcha verification failed")
+
+    return VerifyResponse(success=True, message="Verification successful")
 
 
 async def verify_smart_captcha_token(token: str, client_ip: str = "") -> bool:
