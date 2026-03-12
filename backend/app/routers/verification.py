@@ -1,3 +1,5 @@
+import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import secrets
@@ -5,6 +7,7 @@ import hashlib
 import logging
 
 from fastapi import APIRouter, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -239,6 +242,57 @@ async def verify_smart_captcha_token(token: str, client_ip: str = "") -> bool:
     except Exception as e:
         logger.error(f"Error verifying SmartCaptcha: {e}")
         return False
+
+
+@router.get("/code-stream")
+async def code_stream(state: str, request: Request):
+    """SSE stream: polls Stream Bot code info every 0.5s for users on captcha page."""
+    if not settings.stream_bot_token:
+        return StreamingResponse(iter(["data: {}\n\n"]), media_type="text/event-stream")
+
+    headers = {"Authorization": f"Bearer {settings.stream_bot_token}"}
+    base_url = settings.stream_bot_url
+
+    async def event_generator():
+        code_id = None
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(
+                    f"{base_url}/api/captcha/status/{state}",
+                    headers=headers,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    code_id = data.get("code_id") or data.get("codeId")
+        except Exception as exc:
+            logger.debug("code-stream: cannot get captcha status: %s", exc)
+
+        if not code_id:
+            yield "data: {}\n\n"
+            return
+
+        deadline = asyncio.get_event_loop().time() + 600  # 10 min max
+        async with httpx.AsyncClient(timeout=5) as client:
+            while asyncio.get_event_loop().time() < deadline:
+                if await request.is_disconnected():
+                    break
+                try:
+                    r = await client.get(
+                        f"{base_url}/api/codes/info",
+                        params={"code": code_id},
+                        headers=headers,
+                    )
+                    if r.status_code == 200:
+                        yield f"data: {r.text}\n\n"
+                except Exception as exc:
+                    logger.debug("code-stream poll error: %s", exc)
+                await asyncio.sleep(0.5)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/status/{state}")

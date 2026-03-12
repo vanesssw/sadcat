@@ -470,4 +470,32 @@
   }
 
   st("LOADING CAPTCHA...", "var(--cyan,#00E5FF)", "status-loading");
+
+  // ---- Code info SSE stream ----
+  const codeInfoBanner = document.getElementById("code-info-banner");
+  if (codeInfoBanner && currentState && settings && window.EventSource) {
+    startCodeInfoStream(currentState, codeInfoBanner);
+  } else if (codeInfoBanner && currentState) {
+    startCodeInfoStream(currentState, codeInfoBanner);
+  }
+
+  function startCodeInfoStream(state, banner) {
+    const es = new EventSource(`/verify/code-stream?state=${encodeURIComponent(state)}`);
+    es.onmessage = function (e) {
+      try {
+        const data = JSON.parse(e.data);
+        if (!data || Object.keys(data).length === 0) return;
+        const parts = [];
+        if (data.remaining !== undefined) parts.push(`REMAINING: ${data.remaining}`);
+        if (data.total !== undefined) parts.push(`TOTAL: ${data.total}`);
+        if (data.used !== undefined) parts.push(`USED: ${data.used}`);
+        if (data.name !== undefined) parts.push(`CODE: ${data.name}`);
+        if (parts.length > 0) {
+          banner.textContent = parts.join(" | ");
+          banner.style.display = "block";
+        }
+      } catch (_) {}
+    };
+    es.onerror = function () { es.close(); };
+  }
 })();
