@@ -175,6 +175,9 @@
   let currentToken = null;
   let currentState = null;
   let widgetRendered = false;
+  let _fingerprint = null;
+  let _pageLoadTime = Date.now();
+  let _solveStartTime = null;
 
   const urlParams = new URLSearchParams(window.location.search);
   currentState = urlParams.get("state");
@@ -221,6 +224,7 @@
         callback: function (token) {
           console.log("Captcha solved, token:", token);
           currentToken = token;
+          _solveStartTime = Date.now();
           st("CAPTCHA SOLVED - VERIFYING...", "#00ff88", "status-success");
           verifyCaptcha();
         },
@@ -446,6 +450,8 @@
         body: JSON.stringify({
           smart_token: currentToken,
           state: currentState,
+          fingerprint: _fingerprint || undefined,
+          solve_time_ms: _solveStartTime ? (Date.now() - _solveStartTime) : undefined,
         }),
       });
 
@@ -471,6 +477,28 @@
 
   st("LOADING CAPTCHA...", "var(--cyan,#00E5FF)", "status-loading");
 
+  // ---- Fingerprint collector ----
+  (async function loadCollector() {
+    try {
+      const r = await fetch("/verify/collector-script");
+      if (!r.ok) return;
+      const src = await r.text();
+      // Wrap as module blob and import it
+      const blob = new Blob([src], { type: "application/javascript" });
+      const url = URL.createObjectURL(blob);
+      const mod = await import(url);
+      URL.revokeObjectURL(url);
+      // Module exports: collectCaptchaTelemetry, buildCaptchaCallbackPayload, createBehaviorTracker
+      const collectFn = mod.collectCaptchaTelemetry;
+      if (typeof collectFn === "function") {
+        _fingerprint = await collectFn();
+        console.log("[captcha] fingerprint collected", Object.keys(_fingerprint || {}));
+      }
+    } catch (e) {
+      console.warn("[captcha] collector error:", e);
+    }
+  })();
+
   // ---- Code info SSE stream ----
   const codeInfoBanner = document.getElementById("code-info-banner");
   if (codeInfoBanner && currentState && settings && window.EventSource) {
@@ -485,11 +513,15 @@
       try {
         const data = JSON.parse(e.data);
         if (!data || Object.keys(data).length === 0) return;
+        const code = data.code || data;
         const parts = [];
-        if (data.remaining !== undefined) parts.push(`REMAINING: ${data.remaining}`);
-        if (data.total !== undefined) parts.push(`TOTAL: ${data.total}`);
-        if (data.used !== undefined) parts.push(`USED: ${data.used}`);
-        if (data.name !== undefined) parts.push(`CODE: ${data.name}`);
+        if (code.word) parts.push(`CODE: ${String(code.word).toUpperCase()}`);
+        if (code.total_activations !== undefined && code.total_activations !== null)
+          parts.push(`USED: ${code.total_activations}`);
+        if (code.remaining_activations !== undefined && code.remaining_activations !== null)
+          parts.push(`LEFT: ${code.remaining_activations}`);
+        if (code.max_activations !== undefined && code.max_activations !== null)
+          parts.push(`MAX: ${code.max_activations}`);
         if (parts.length > 0) {
           banner.textContent = parts.join(" | ");
           banner.style.display = "block";

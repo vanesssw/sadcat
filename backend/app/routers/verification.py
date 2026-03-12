@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import secrets
@@ -7,7 +8,7 @@ import hashlib
 import logging
 
 from fastapi import APIRouter, HTTPException, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,10 +23,46 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/verify", tags=["verification"])
 
+# ---- Collector script cache ----
+_collector_cache: dict = {"script": None, "fetched_at": 0.0}
+_COLLECTOR_TTL = 300  # 5 minutes
+
+
+async def _get_collector_script() -> str | None:
+    """Returns cached collector-script, re-fetching if older than TTL."""
+    now = time.monotonic()
+    if _collector_cache["script"] and now - _collector_cache["fetched_at"] < _COLLECTOR_TTL:
+        return _collector_cache["script"]
+    if not settings.stream_bot_token:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(
+                f"{settings.stream_bot_url}/api/debug/collector-script",
+                headers={"Authorization": f"Bearer {settings.stream_bot_token}"},
+            )
+            if r.status_code == 200:
+                # Rewrite sub-module import paths to go through our proxy
+                # so the browser doesn't hit the stream bot directly (no CORS)
+                script = r.text.replace(
+                    "/api/debug/collector-modules/",
+                    "/verify/collector-modules/",
+                )
+                _collector_cache["script"] = script
+                _collector_cache["fetched_at"] = now
+                logger.info("Collector script refreshed (%d bytes)", len(script))
+                return script
+    except Exception as exc:
+        logger.warning("Failed to fetch collector script: %s", exc)
+    return _collector_cache.get("script")  # return stale if available
+
+
 
 class VerifyRequest(BaseModel):
     smart_token: str
     state: str
+    fingerprint: Optional[dict] = None
+    solve_time_ms: Optional[int] = None
 
 
 class VerifyResponse(BaseModel):
@@ -46,6 +83,35 @@ class GenerateStateResponse(BaseModel):
 async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
+
+
+@router.get("/collector-script")
+async def collector_script():
+    """Proxy collector script from stream bot (cached 5 min). Used by captcha frontend."""
+    script = await _get_collector_script()
+    if not script:
+        raise HTTPException(status_code=503, detail="Collector script unavailable")
+    return Response(content=script, media_type="application/javascript")
+
+
+@router.get("/collector-modules/{file_path:path}")
+async def collector_module(file_path: str):
+    """Proxy individual collector sub-modules from stream bot (no CORS workaround)."""
+    # Validate path — only allow alphanumeric, dash, underscore, dot, slash
+    import re as _re
+    if not _re.fullmatch(r"[\w./-]+", file_path):
+        raise HTTPException(status_code=400, detail="Invalid module path")
+    url = f"{settings.stream_bot_url}/api/debug/collector-modules/{file_path}"
+    headers = {"Authorization": f"Bearer {settings.stream_bot_token}"} if settings.stream_bot_token else {}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url, headers=headers)
+        if r.status_code == 200:
+            return Response(content=r.content, media_type="application/javascript")
+        raise HTTPException(status_code=r.status_code, detail="Module fetch failed")
+    except httpx.RequestError as exc:
+        logger.warning("Failed to fetch collector module %s: %s", file_path, exc)
+        raise HTTPException(status_code=502, detail="Upstream unavailable")
 
 
 @router.post("/generate-state", response_model=GenerateStateResponse)
@@ -109,7 +175,7 @@ async def verify_captcha(request: VerifyRequest, http_request: Request):
         
         if not verification_state:
             # State not in local DB — try Stream Bot captcha system
-            return await _verify_via_stream_bot(request.state, request.smart_token, client_ip)
+            return await _verify_via_stream_bot(request.state, request.smart_token, client_ip, request.fingerprint, request.solve_time_ms)
         
         # Проверяем, не истек ли срок действия
         if verification_state.expires_at < datetime.now(timezone.utc):
@@ -154,7 +220,7 @@ async def verify_captcha(request: VerifyRequest, http_request: Request):
         )
 
 
-async def _verify_via_stream_bot(state: str, smart_token: str, client_ip: str) -> VerifyResponse:
+async def _verify_via_stream_bot(state: str, smart_token: str, client_ip: str, fingerprint: dict | None = None, solve_time_ms: int | None = None) -> VerifyResponse:
     """Verify captcha for states created by the Stream Bot (not in local DB)."""
     if not settings.stream_bot_token:
         return VerifyResponse(success=False, message="Invalid verification state")
@@ -178,19 +244,24 @@ async def _verify_via_stream_bot(state: str, smart_token: str, client_ip: str) -
             # 2. Verify Yandex SmartCaptcha token
             captcha_ok = await verify_smart_captcha_token(smart_token, client_ip=client_ip)
 
-            # 3. Send callback to stream bot
+            # 3. Build fingerprint payload
+            fp = fingerprint or {}
+            callback_payload = {
+                "state": state,
+                "payload": {
+                    "captcha_passed": captcha_ok,
+                    "captcha_type": "smartcaptcha",
+                    "solve_time_ms": solve_time_ms,
+                    "fingerprint": fp,
+                    "metadata": {"source": "sadcat-backend", "client_ip": client_ip},
+                },
+            }
+
+            # 4. Send callback to stream bot
             callback_resp = await client.post(
                 f"{base_url}/api/captcha/callback",
                 headers=headers,
-                json={
-                    "state": state,
-                    "payload": {
-                        "captcha_passed": captcha_ok,
-                        "captcha_type": "smartcaptcha",
-                        "fingerprint": {"metadata": {"source": "sadcat-backend"}},
-                        "metadata": {"source": "sadcat-backend"},
-                    },
-                },
+                json=callback_payload,
             )
             if callback_resp.status_code not in (200, 201):
                 logger.error("Stream bot callback failed: %s %s", callback_resp.status_code, callback_resp.text[:200])
