@@ -501,7 +501,7 @@
 
   // ---- Code info banner (by code_id) ----
   const codeInfoBanner = document.getElementById("code-info-banner");
-  const urlParams = new URLSearchParams(window.location.search);
+  // urlParams уже объявлен выше
   const codeId = urlParams.get("code_id") || urlParams.get("code") || null;
 
   // Если code_id есть в URL — сразу показываем баннер
