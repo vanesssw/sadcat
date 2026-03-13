@@ -515,7 +515,7 @@
         console.log('[code-banner] status response:', data);
         const codeId = data && (data.code_id || data.codeId);
         if (codeId) {
-          fetch(`/api/codes/info?code=${encodeURIComponent(codeId)}`)
+          fetch(`/verify/code-info?code=${encodeURIComponent(codeId)}`)
             .then(r => r.ok ? r.json() : null)
             .then(codeData => {
               console.log('[code-banner] code info response:', codeData);
@@ -564,9 +564,14 @@
       });
   }
 
+  // Запускаем live-обновление статистики по коду, если есть state
+  if (codeInfoBanner && currentState) {
+    startCodeInfoStream(currentState, codeInfoBanner);
+  }
+
   async function showCodeInfoBanner(codeId, banner) {
     try {
-      const r = await fetch(`/api/codes/info?code=${encodeURIComponent(codeId)}`);
+      const r = await fetch(`/verify/code-info?code=${encodeURIComponent(codeId)}`);
       if (!r.ok) {
         console.error('[code-banner] code info fetch failed:', r.status);
         return;
