@@ -384,27 +384,37 @@ async def code_stream(state: str, request: Request):
 
 @router.get("/status/{state}")
 async def get_verification_status(state: str):
-    """Проверяет статус верификации для state"""
+    """Проверяет статус верификации для state (локально или через stream bot)"""
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(VerificationState)
             .where(VerificationState.state == state)
         )
         verification_state = result.scalar_one_or_none()
-        
-        if not verification_state:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Verification state not found"
-            )
-        
-        return {
-            "state": state,
-            "is_verified": verification_state.is_verified,
-            "expires_at": verification_state.expires_at,
-            "created_at": verification_state.created_at,
-            "verified_at": verification_state.verified_at
-        }
+        if verification_state:
+            return {
+                "state": state,
+                "is_verified": verification_state.is_verified,
+                "expires_at": verification_state.expires_at,
+                "created_at": verification_state.created_at,
+                "verified_at": verification_state.verified_at
+            }
+    # Если не найдено локально — пробуем через stream bot
+    if not settings.stream_bot_token:
+        raise HTTPException(status_code=404, detail="Verification state not found")
+    import httpx
+    headers = {"Authorization": f"Bearer {settings.stream_bot_token}"}
+    base_url = settings.stream_bot_url
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(f"{base_url}/api/captcha/status/{state}", headers=headers)
+        if r.status_code == 200:
+            data = r.json()
+            return data
+        else:
+            raise HTTPException(status_code=404, detail="Verification state not found (stream bot)")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Upstream unavailable: {exc}")
 
 
 async def award_points_to_user(user_id: int, username: str, session: AsyncSession):
