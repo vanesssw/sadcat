@@ -499,12 +499,78 @@
     }
   })();
 
-  // ---- Code info SSE stream ----
+  // ---- Code info banner (by code_id) ----
   const codeInfoBanner = document.getElementById("code-info-banner");
-  if (codeInfoBanner && currentState && settings && window.EventSource) {
-    startCodeInfoStream(currentState, codeInfoBanner);
+  const urlParams = new URLSearchParams(window.location.search);
+  const codeId = urlParams.get("code_id") || urlParams.get("code") || null;
+
+  // Если code_id есть в URL — сразу показываем баннер
+  if (codeInfoBanner && codeId) {
+    showCodeInfoBanner(codeId, codeInfoBanner);
   } else if (codeInfoBanner && currentState) {
-    startCodeInfoStream(currentState, codeInfoBanner);
+    // Получаем code_id по state, затем статистику по code_id
+    fetch(`/verify/status/${encodeURIComponent(currentState)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        const codeId = data && (data.code_id || data.codeId);
+        if (codeId) {
+          fetch(`/verify/code-info?code=${encodeURIComponent(codeId)}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(codeData => {
+              const code = codeData && (codeData.code || codeData);
+              const parts = [];
+              if (code && code.word) parts.push(`CODE: ${String(code.word).toUpperCase()}`);
+              if (code && code.total_activations !== undefined && code.total_activations !== null)
+                parts.push(`USED: ${code.total_activations}`);
+              if (code && code.remaining_activations !== undefined && code.remaining_activations !== null)
+                parts.push(`LEFT: ${code.remaining_activations}`);
+              if (code && code.max_activations !== undefined && code.max_activations !== null)
+                parts.push(`MAX: ${code.max_activations}`);
+              if (parts.length > 0) {
+                codeInfoBanner.textContent = parts.join(" | ");
+                codeInfoBanner.style.display = "block";
+              } else {
+                codeInfoBanner.textContent = "CODE INFO UNAVAILABLE";
+                codeInfoBanner.style.display = "block";
+              }
+            })
+            .catch(() => {
+              codeInfoBanner.textContent = "CODE INFO UNAVAILABLE";
+              codeInfoBanner.style.display = "block";
+            });
+        } else {
+          codeInfoBanner.textContent = "CODE INFO UNAVAILABLE";
+          codeInfoBanner.style.display = "block";
+        }
+      })
+      .catch(() => {
+        codeInfoBanner.textContent = "CODE INFO UNAVAILABLE";
+        codeInfoBanner.style.display = "block";
+      });
+  }
+
+  async function showCodeInfoBanner(codeId, banner) {
+    try {
+      const r = await fetch(`/verify/code-info?code=${encodeURIComponent(codeId)}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      const code = data.code || data;
+      const parts = [];
+      if (code.word) parts.push(`CODE: ${String(code.word).toUpperCase()}`);
+      if (code.total_activations !== undefined && code.total_activations !== null)
+        parts.push(`USED: ${code.total_activations}`);
+      if (code.remaining_activations !== undefined && code.remaining_activations !== null)
+        parts.push(`LEFT: ${code.remaining_activations}`);
+      if (code.max_activations !== undefined && code.max_activations !== null)
+        parts.push(`MAX: ${code.max_activations}`);
+      if (parts.length > 0) {
+        banner.textContent = parts.join(" | ");
+        banner.style.display = "block";
+      }
+    } catch (e) {
+      banner.textContent = "CODE INFO UNAVAILABLE";
+      banner.style.display = "block";
+    }
   }
 
   function startCodeInfoStream(state, banner) {

@@ -365,6 +365,22 @@ async def code_stream(state: str, request: Request):
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
+    @router.get("/code-info")
+    async def code_info(code: int):
+        """Возвращает статистику по коду (code_id) напрямую через stream bot."""
+        if not settings.stream_bot_token:
+            raise HTTPException(status_code=503, detail="Stream bot token not configured")
+        headers = {"Authorization": f"Bearer {settings.stream_bot_token}"}
+        base_url = settings.stream_bot_url
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(f"{base_url}/api/codes/info", params={"code": code}, headers=headers)
+            if r.status_code == 200:
+                return Response(content=r.text, media_type="application/json")
+            raise HTTPException(status_code=r.status_code, detail="Code info fetch failed")
+        except Exception as exc:
+            logger.warning("Failed to fetch code info %s: %s", code, exc)
+            raise HTTPException(status_code=502, detail="Upstream unavailable")
 
 @router.get("/status/{state}")
 async def get_verification_status(state: str):
