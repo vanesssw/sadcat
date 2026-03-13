@@ -514,7 +514,7 @@
       .then(data => {
         const codeId = data && (data.code_id || data.codeId);
         if (codeId) {
-          fetch(`/verify/code-info?code=${encodeURIComponent(codeId)}`)
+          fetch(`/api/codes/info?code=${encodeURIComponent(codeId)}`)
             .then(r => r.ok ? r.json() : null)
             .then(codeData => {
               const code = codeData && (codeData.code || codeData);
@@ -551,7 +551,7 @@
 
   async function showCodeInfoBanner(codeId, banner) {
     try {
-      const r = await fetch(`/verify/code-info?code=${encodeURIComponent(codeId)}`);
+      const r = await fetch(`/api/codes/info?code=${encodeURIComponent(codeId)}`);
       if (!r.ok) return;
       const data = await r.json();
       const code = data.code || data;
