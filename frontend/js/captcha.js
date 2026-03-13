@@ -508,57 +508,33 @@
   if (codeInfoBanner && codeId) {
     showCodeInfoBanner(codeId, codeInfoBanner);
   } else if (codeInfoBanner && currentState) {
-    // Получаем code_id по state, затем статистику по code_id
     fetch(`/verify/status/${encodeURIComponent(currentState)}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        console.log('[code-banner] status response:', data);
         const codeId = data && (data.code_id || data.codeId);
         if (codeId) {
           fetch(`/verify/code-info?code=${encodeURIComponent(codeId)}`)
             .then(r => r.ok ? r.json() : null)
             .then(codeData => {
-              console.log('[code-banner] code info response:', codeData);
               const code = codeData && (codeData.code || codeData);
-              console.log('[code-banner] parsed code:', code);
-              const parts = [];
-              if (code && code.word) parts.push(`CODE: ${String(code.word).toUpperCase()}`);
-              if (code && code.total_activations !== undefined && code.total_activations !== null) {
-                parts.push(`USED: ${code.total_activations}`);
-              } else {
-                console.warn('[code-banner] total_activations not found:', code && code.total_activations);
-              }
-              if (code && code.remaining_activations !== undefined && code.remaining_activations !== null) {
-                parts.push(`LEFT: ${code.remaining_activations}`);
-              } else {
-                console.warn('[code-banner] remaining_activations not found:', code && code.remaining_activations);
-              }
-              if (code && code.max_activations !== undefined && code.max_activations !== null) {
-                parts.push(`MAX: ${code.max_activations}`);
-              } else {
-                console.warn('[code-banner] max_activations not found:', code && code.max_activations);
-              }
-              if (parts.length > 0) {
-                codeInfoBanner.textContent = parts.join(" | ");
+              if (code && code.total_activations !== undefined && code.max_activations !== undefined) {
+                codeInfoBanner.textContent = `USED: ${code.total_activations}/${code.max_activations}`;
                 codeInfoBanner.style.display = "block";
               } else {
                 codeInfoBanner.textContent = "CODE INFO UNAVAILABLE";
                 codeInfoBanner.style.display = "block";
               }
             })
-            .catch((err) => {
-              console.error('[code-banner] code info fetch error:', err);
+            .catch(() => {
               codeInfoBanner.textContent = "CODE INFO UNAVAILABLE";
               codeInfoBanner.style.display = "block";
             });
         } else {
-          console.warn('[code-banner] code_id not found in status response:', data);
           codeInfoBanner.textContent = "CODE INFO UNAVAILABLE";
           codeInfoBanner.style.display = "block";
         }
       })
-      .catch((err) => {
-        console.error('[code-banner] status fetch error:', err);
+      .catch(() => {
         codeInfoBanner.textContent = "CODE INFO UNAVAILABLE";
         codeInfoBanner.style.display = "block";
       });
@@ -572,37 +548,17 @@
   async function showCodeInfoBanner(codeId, banner) {
     try {
       const r = await fetch(`/verify/code-info?code=${encodeURIComponent(codeId)}`);
-      if (!r.ok) {
-        console.error('[code-banner] code info fetch failed:', r.status);
-        return;
-      }
+      if (!r.ok) return;
       const data = await r.json();
-      console.log('[code-banner] code info response:', data);
       const code = data.code || data;
-      console.log('[code-banner] parsed code:', code);
-      const parts = [];
-      if (code.word) parts.push(`CODE: ${String(code.word).toUpperCase()}`);
-      if (code.total_activations !== undefined && code.total_activations !== null) {
-        parts.push(`USED: ${code.total_activations}`);
+      if (code && code.total_activations !== undefined && code.max_activations !== undefined) {
+        banner.textContent = `USED: ${code.total_activations}/${code.max_activations}`;
+        banner.style.display = "block";
       } else {
-        console.warn('[code-banner] total_activations not found:', code && code.total_activations);
-      }
-      if (code.remaining_activations !== undefined && code.remaining_activations !== null) {
-        parts.push(`LEFT: ${code.remaining_activations}`);
-      } else {
-        console.warn('[code-banner] remaining_activations not found:', code && code.remaining_activations);
-      }
-      if (code.max_activations !== undefined && code.max_activations !== null) {
-        parts.push(`MAX: ${code.max_activations}`);
-      } else {
-        console.warn('[code-banner] max_activations not found:', code && code.max_activations);
-      }
-      if (parts.length > 0) {
-        banner.textContent = parts.join(" | ");
+        banner.textContent = "CODE INFO UNAVAILABLE";
         banner.style.display = "block";
       }
     } catch (e) {
-      console.error('[code-banner] code info fetch error:', e);
       banner.textContent = "CODE INFO UNAVAILABLE";
       banner.style.display = "block";
     }
@@ -615,16 +571,8 @@
         const data = JSON.parse(e.data);
         if (!data || Object.keys(data).length === 0) return;
         const code = data.code || data;
-        const parts = [];
-        if (code.word) parts.push(`CODE: ${String(code.word).toUpperCase()}`);
-        if (code.total_activations !== undefined && code.total_activations !== null)
-          parts.push(`USED: ${code.total_activations}`);
-        if (code.remaining_activations !== undefined && code.remaining_activations !== null)
-          parts.push(`LEFT: ${code.remaining_activations}`);
-        if (code.max_activations !== undefined && code.max_activations !== null)
-          parts.push(`MAX: ${code.max_activations}`);
-        if (parts.length > 0) {
-          banner.textContent = parts.join(" | ");
+        if (code && code.total_activations !== undefined && code.max_activations !== undefined) {
+          banner.textContent = `USED: ${code.total_activations}/${code.max_activations}`;
           banner.style.display = "block";
         }
       } catch (_) {}
