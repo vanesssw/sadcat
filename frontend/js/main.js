@@ -164,16 +164,24 @@ function formatScore(n) {
 function formatDate(iso) {
   if (!iso) return 'N/A';
   return new Intl.DateTimeFormat('en-US', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'UTC',
+    timeZoneName: 'short',
   }).format(new Date(iso));
 }
 
 function avatarHtml(entry) {
-  if (entry.avatar_b64) {
-    return `<img src="data:image/jpeg;base64,${entry.avatar_b64}" alt="@${entry.username}" style="width:100%;height:100%;object-fit:cover;display:block;image-rendering:pixelated;">`;
-  }
-  return avatarInitials(entry.username);
+  // Use static leaderboard avatars: frontend/png/ant/ant1.png ... ant15.png
+  // We have 25 places, so cycle through 15 images (15 + 10).
+  const rank = entry.rank || 1;
+  const idx = ((rank - 1) % 15) + 1; // 1..15
+  const safeUsername = entry.username ? String(entry.username) : '';
+  return `<img src="/png/ant/ant${idx}.png" alt="@${safeUsername}" style="width:100%;height:100%;object-fit:cover;display:block;image-rendering:pixelated;">`;
 }
 
 function avatarInitials(name) {
@@ -229,10 +237,7 @@ function renderPodium(entries) {
     item.className = 'podium-item';
     item.dataset.rank = rank;
     item.innerHTML = `
-      <div class="podium-avatar">${entry.avatar_b64
-        ? `<img src="data:image/jpeg;base64,${entry.avatar_b64}" style="width:100%;height:100%;object-fit:cover;display:block;image-rendering:pixelated;">`
-        : avatarInitials(entry.username)}
-      </div>
+      <div class="podium-avatar">${avatarHtml(entry)}</div>
       <div class="podium-name">@${entry.username}</div>
       <div class="podium-score">${formatScore(entry.score)}</div>
       <div class="podium-block">${rank}</div>
@@ -244,6 +249,9 @@ function renderPodium(entries) {
 function renderTable(entries) {
   const body = document.getElementById('leaderboardBody');
   body.innerHTML = '';
+
+  // Показываем только топ-25 игроков
+  entries = entries.slice(0, 25);
 
   if (!entries || entries.length === 0) {
     body.innerHTML = `
@@ -596,22 +604,12 @@ async function renderRaffleWinners() {
   const list = document.getElementById('raffleWinnersList');
   if (!list) return;
 
-  // Try API first (authoritative, survives browser/localStorage resets)
-  try {
-    const res = await fetch('/api/wheel/history?limit=3');
-    if (res.ok) {
-      const rows = await res.json();
-      if (rows && rows.length) {
-        _renderWinnerCards(rows);
-        return;
-      }
-    }
-  } catch(e) { /* fallthrough to localStorage */ }
-
-  // Fallback: localStorage (populated by wheel.js after spin animation)
-  let winners = [];
-  try { winners = JSON.parse(localStorage.getItem('sadcat_raffle_winners') || '[]'); } catch(e) {}
-  _renderWinnerCards(winners);
+  // Wheel и розыгрыши пока отключены — показываем заглушку
+  list.innerHTML = `
+    <div class="rw-empty">
+      WEEKLY RAFFLE COMING SOON
+    </div>
+  `;
 }
 
 // ---- Smooth scroll for nav links ----

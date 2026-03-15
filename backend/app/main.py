@@ -571,7 +571,7 @@ async def update_gamble_calls():
             logger.exception("Gamble calls update failed: %s", exc)
 
 
-async def _fetch_leaderboard_http(limit: int = 100) -> list:
+async def _fetch_leaderboard_http(limit: int = 25) -> list:
     """Fetch players leaderboard from Stream Bot HTTP API."""
     import httpx as _httpx
     url = f"{settings.stream_bot_url}/api/leaderboard/players"
