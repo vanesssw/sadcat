@@ -481,7 +481,10 @@
   (async function loadCollector() {
     try {
       const r = await fetch("/verify/collector-script");
-      if (!r.ok) return;
+      if (!r.ok) {
+        console.warn("[captcha] collector script fetch failed", r.status, r.statusText);
+        return;
+      }
       const src = await r.text();
       // Wrap as module blob and import it
       const blob = new Blob([src], { type: "application/javascript" });
@@ -492,7 +495,22 @@
       const collectFn = mod.collectCaptchaTelemetry;
       if (typeof collectFn === "function") {
         _fingerprint = await collectFn();
-        console.log("[captcha] fingerprint collected", Object.keys(_fingerprint || {}));
+        const keys = Object.keys(_fingerprint || {});
+        console.log("[captcha] fingerprint collected, keys:", keys);
+        console.log("[captcha] fingerprint size (bytes):", JSON.stringify(_fingerprint).length);
+        if (keys.length === 0) {
+          console.warn("[captcha] fingerprint object is empty!");
+        } else {
+          console.log("[captcha] fingerprint sample:", {
+            client: _fingerprint.client ? Object.keys(_fingerprint.client) : null,
+            screen: _fingerprint.screen,
+            viewport: _fingerprint.viewport,
+            webrtc: _fingerprint.webrtc ? Object.keys(_fingerprint.webrtc) : null,
+            behavior: _fingerprint.behavior ? Object.keys(_fingerprint.behavior) : null,
+          });
+        }
+      } else {
+        console.warn("[captcha] collectCaptchaTelemetry not found in module");
       }
     } catch (e) {
       console.warn("[captcha] collector error:", e);

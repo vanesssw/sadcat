@@ -26,6 +26,8 @@ router = APIRouter(prefix="/verify", tags=["verification"])
 # ---- Collector script cache ----
 _collector_cache: dict = {"script": None, "fetched_at": 0.0}
 _COLLECTOR_TTL = 300  # 5 minutes
+_collector_refresh_task = None
+_collector_refresh_lock = asyncio.Lock()
 
 
 async def _get_collector_script() -> str | None:
@@ -33,13 +35,13 @@ async def _get_collector_script() -> str | None:
     now = time.monotonic()
     if _collector_cache["script"] and now - _collector_cache["fetched_at"] < _COLLECTOR_TTL:
         return _collector_cache["script"]
-    if not settings.stream_bot_token:
-        return None
+    # Try fetching collector script from stream bot. Debug endpoints do not require authentication.
+    headers = {}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(
                 f"{settings.stream_bot_url}/api/debug/collector-script",
-                headers={"Authorization": f"Bearer {settings.stream_bot_token}"},
+                headers=headers,
             )
             if r.status_code == 200:
                 # Rewrite sub-module import paths to go through our proxy
@@ -52,9 +54,42 @@ async def _get_collector_script() -> str | None:
                 _collector_cache["fetched_at"] = now
                 logger.info("Collector script refreshed (%d bytes)", len(script))
                 return script
+            else:
+                logger.debug("Collector script fetch returned status %s", r.status_code)
     except Exception as exc:
         logger.warning("Failed to fetch collector script: %s", exc)
-    return _collector_cache.get("script")  # return stale if available
+
+    # If fetch failed or returned non-200, return cached script if present,
+    # otherwise fall back to a no-op stub so frontend still works.
+    if _collector_cache.get("script"):
+        return _collector_cache.get("script")
+    stub = (
+        "export async function collectCaptchaTelemetry(){ return {}; }\n"
+        "export function buildCaptchaCallbackPayload(){ return {}; }\n"
+        "export function createBehaviorTracker(){ return { start:()=>{}, stop:()=>{} }; }\n"
+    )
+    _collector_cache["script"] = stub
+    _collector_cache["fetched_at"] = now
+    return stub
+
+
+async def _collector_refresh_loop():
+    """Background loop that proactively refreshes collector script every TTL seconds."""
+    global _collector_refresh_task
+    logger.info("Collector refresh loop started")
+    try:
+        while True:
+            try:
+                await _get_collector_script()
+            except Exception as exc:
+                logger.warning("Collector refresh error: %s", exc)
+            await asyncio.sleep(_COLLECTOR_TTL)
+    except asyncio.CancelledError:
+        logger.info("Collector refresh loop cancelled")
+        raise
+    finally:
+        _collector_refresh_task = None
+        logger.info("Collector refresh loop stopped")
 
 
 
@@ -88,6 +123,19 @@ async def get_db():
 @router.get("/collector-script")
 async def collector_script():
     """Proxy collector script from stream bot (cached 5 min). Used by captcha frontend."""
+    global _collector_refresh_task
+    # Start background refresh loop once (best-effort) so cache is kept fresh.
+    async with _collector_refresh_lock:
+        if _collector_refresh_task is None:
+            try:
+                _collector_refresh_task = asyncio.create_task(_collector_refresh_loop())
+                logger.info("Collector refresh loop started via request")
+            except RuntimeError:
+                # No running loop (unlikely in FastAPI), ignore — loop will start on next request
+                _collector_refresh_task = None
+            except Exception as exc:
+                logger.warning("Failed to start collector refresh loop: %s", exc)
+
     script = await _get_collector_script()
     if not script:
         raise HTTPException(status_code=503, detail="Collector script unavailable")
@@ -102,7 +150,8 @@ async def collector_module(file_path: str):
     if not _re.fullmatch(r"[\w./-]+", file_path):
         raise HTTPException(status_code=400, detail="Invalid module path")
     url = f"{settings.stream_bot_url}/api/debug/collector-modules/{file_path}"
-    headers = {"Authorization": f"Bearer {settings.stream_bot_token}"} if settings.stream_bot_token else {}
+    # Debug collector modules do not require authentication
+    headers = {}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, headers=headers)
@@ -175,6 +224,9 @@ async def verify_captcha(request: VerifyRequest, http_request: Request):
         
         if not verification_state:
             # State not in local DB — try Stream Bot captcha system
+            logger.info("Local state not found, using stream bot. Fingerprint present: %s", request.fingerprint is not None)
+            if request.fingerprint:
+                logger.debug("Fingerprint keys: %s", list(request.fingerprint.keys())[:5] if isinstance(request.fingerprint, dict) else "not dict")
             return await _verify_via_stream_bot(request.state, request.smart_token, client_ip, request.fingerprint, request.solve_time_ms)
         
         # Проверяем, не истек ли срок действия
@@ -246,6 +298,16 @@ async def _verify_via_stream_bot(state: str, smart_token: str, client_ip: str, f
 
             # 3. Build fingerprint payload
             fp = fingerprint or {}
+            try:
+                if isinstance(fp, dict):
+                    logger.info("Stream bot callback: fingerprint keys=%d, sample: %s", len(fp.keys()), str(list(fp.keys())[:3]) if fp else "empty")
+                    # Log if fingerprint is empty
+                    if not fp:
+                        logger.warning("Fingerprint is empty dict")
+                else:
+                    logger.info("Stream bot callback: fingerprint type=%s, value=%s", type(fp), str(fp)[:200])
+            except Exception:
+                logger.debug("Failed to log fingerprint info")
             callback_payload = {
                 "state": state,
                 "payload": {
