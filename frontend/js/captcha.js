@@ -208,7 +208,15 @@
     if (!api || typeof api.render !== "function") {
       console.error("SmartCaptcha API not available", { smartcaptcha: window.smartcaptcha, smartCaptcha: window.smartCaptcha });
       st("ERROR LOADING CAPTCHA", "#ff4466", "status-error");
-      showError("SmartCaptcha API not available");
+      showError("Captcha could not be loaded. Disable VPN/adblock and try again, or use fallback mode.");
+      showFallbackCaptcha();
+      return;
+    }
+
+    if (!YANDEX_SITE_KEY || YANDEX_SITE_KEY === "YANDEX_CLIENT_KEY_HERE") {
+      console.error("Yandex site key missing/placeholder", { YANDEX_SITE_KEY });
+      st("ERROR LOADING CAPTCHA", "#ff4466", "status-error");
+      showError("Captcha is temporarily unavailable. Please try again later or use fallback mode.");
       showFallbackCaptcha();
       return;
     }
@@ -234,7 +242,7 @@
     } catch (error) {
       console.error("Error rendering captcha:", error);
       st("ERROR RENDERING CAPTCHA", "#ff4466", "status-error");
-      showError("Error rendering captcha: " + error.message);
+      showError("Captcha could not be displayed. Disable VPN/adblock and try again, or use fallback mode.");
       showFallbackCaptcha();
     }
   };
@@ -426,15 +434,12 @@
         lastError: __captchaDebug.lastError,
       });
       st("ERROR LOADING CAPTCHA", "#ff4466", "status-error");
-      const detail = __captchaDebug.lastError
-        ? ` Details: ${JSON.stringify(__captchaDebug.lastError)}`
-        : "";
-      showError("Failed to load Yandex SmartCaptcha. Using fallback mode." + detail);
+      showError("Failed to load captcha (VPN/adblock can block it). Using fallback mode.");
       showFallbackCaptcha();
     });
 
   async function verifyCaptcha() {
-    if (!currentToken) {
+    if (typeof currentToken !== "string" || currentToken.trim().length < 8) {
       showError("Please solve the captcha first");
       return;
     }
